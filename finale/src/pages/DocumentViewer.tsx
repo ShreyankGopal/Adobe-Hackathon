@@ -1,6 +1,4 @@
-
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -16,13 +14,14 @@ import {
 } from 'lucide-react';
 import { usePDF } from '../context/PDFContext';
 
-const DocumentViewer: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const DocumentViewer = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const { getPDFById } = usePDF();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['Title', 'H1']));
+  const [expandedSections, setExpandedSections] = useState(new Set(['Title', 'H1']));
   const [currentPage, setCurrentPage] = useState(1);
+  const adobeDCViewRef = useRef(null);
 
   const pdf = id ? getPDFById(id) : undefined;
 
@@ -57,6 +56,12 @@ const DocumentViewer: React.FC = () => {
         },
         { enablePageChangeEvents: true }
       );
+
+      adobeDCViewRef.current = adobeDCView;
+
+      return () => {
+        adobeDCViewRef.current = null;
+      };
     }
   }, [pdf]);
 
@@ -83,7 +88,7 @@ const DocumentViewer: React.FC = () => {
     );
   }
 
-  const toggleSection = (section: string) => {
+  const toggleSection = (section) => {
     setExpandedSections(prev => {
       const newSet = new Set(prev);
       if (newSet.has(section)) {
@@ -95,22 +100,20 @@ const DocumentViewer: React.FC = () => {
     });
   };
 
-  const handleHeadingClick = (page: number) => {
-    setCurrentPage(page);
-    if (window.AdobeDC) {
-      const adobeDCView = new window.AdobeDC.View({
-        clientId: "b74eb08883f24e1c8ddc8125e8261df8",
-        divId: "pdf-viewer",
+  const handleHeadingClick = (page, text) => {
+    console.log("clicking the")
+    if (adobeDCViewRef.current) {
+      adobeDCViewRef.current.getAPIs().then((apis) => {
+        apis.searchText(text);  // Only this works properly
       });
-      adobeDCView.goToLocation(page);
     }
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(false);
-    }
+    if (window.innerWidth < 1024) setSidebarOpen(false);
   };
+  
+  
 
   const groupHeadings = () => {
-    const grouped: { [key: string]: { text: string; page: number }[] } = {
+    const grouped = {
       Title: [],
       H1: [],
       H2: [],
@@ -127,7 +130,7 @@ const DocumentViewer: React.FC = () => {
     return grouped;
   };
 
-  const renderSection = (section: string, items: { text: string; page: number }[]) => {
+  const renderSection = (section, items) => {
     const isExpanded = expandedSections.has(section);
     return (
       <div key={section} className="mb-2">
@@ -159,8 +162,10 @@ const DocumentViewer: React.FC = () => {
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className="flex items-center py-2 px-4 rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200"
-                  onClick={() => handleHeadingClick(item.page)}
+                  className={`flex items-center py-2 px-4 rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 ${
+                    currentPage === item.page ? 'bg-primary-100' : ''
+                  }`}
+                  onClick={() => handleHeadingClick(item.page, item.text)}
                 >
                   <span className="flex-1 truncate text-gray-700">{item.text}</span>
                   <span className="text-sm text-primary-600 font-medium bg-primary-50 px-2 py-1 rounded">
