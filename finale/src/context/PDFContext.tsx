@@ -1,86 +1,172 @@
 
+// import React, { createContext, useContext, useState, ReactNode } from 'react';
+// import { v4 as uuidv4 } from 'uuid';
+
+// interface OutlineItem {
+//   level: string;
+//   text: string;
+//   page: number;
+// }
+
+// interface Outline {
+//   title: string;
+//   outline: OutlineItem[];
+// }
+
+// interface PDF {
+//   id: string;
+//   file: File;
+//   name: string;
+//   size: number;
+//   uploadedAt: Date;
+//   processed: boolean;
+//   serverFilename: string;
+//   outline: Outline | null;
+// }
+
+// interface PDFContextType {
+//   pdfs: PDF[];
+//   addPDF: (file: File, serverFilename: string, outline: Outline) => void;
+//   removePDF: (id: string) => void;
+//   getPDFById: (id: string) => PDF | undefined;
+//   isProcessing: (name: string) => boolean;
+//   setProcessing: (name: string, processing: boolean) => void;
+// }
+
+// const PDFContext = createContext<PDFContextType | undefined>(undefined);
+
+// export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+//   const [pdfs, setPDFs] = useState<PDF[]>([]);
+//   const [processingPDFs, setProcessingPDFs] = useState<Set<string>>(new Set());
+
+//   const addPDF = (file: File, serverFilename: string, outline: Outline) => {
+//     const pdf: PDF = {
+//       id: uuidv4(),
+//       file,
+//       name: file.name,
+//       size: file.size,
+//       uploadedAt: new Date(),
+//       processed: true,
+//       serverFilename,
+//       outline,
+//     };
+//     setPDFs(prev => [...prev, pdf]);
+//     setProcessingPDFs(prev => {
+//       const newSet = new Set(prev);
+//       newSet.delete(file.name);
+//       return newSet;
+//     });
+//   };
+
+//   const removePDF = (id: string) => {
+//     setPDFs(prev => prev.filter(pdf => pdf.id !== id));
+//   };
+
+//   const getPDFById = (id: string) => {
+//     return pdfs.find(pdf => pdf.id === id);
+//   };
+
+//   const isProcessing = (name: string) => {
+//     return processingPDFs.has(name);
+//   };
+
+//   const setProcessing = (name: string, processing: boolean) => {
+//     setProcessingPDFs(prev => {
+//       const newSet = new Set(prev);
+//       if (processing) {
+//         newSet.add(name);
+//       } else {
+//         newSet.delete(name);
+//       }
+//       return newSet;
+//     });
+//   };
+
+//   return (
+//     <PDFContext.Provider
+//       value={{ pdfs, addPDF, removePDF, getPDFById, isProcessing, setProcessing }}
+//     >
+//       {children}
+//     </PDFContext.Provider>
+//   );
+// };
+
+// export const usePDF = () => {
+//   const context = useContext(PDFContext);
+//   if (!context) {
+//     throw new Error('usePDF must be used within a PDFProvider');
+//   }
+//   return context;
+// };
+// src/context/PDFContext.tsx
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 interface OutlineItem {
-  level: string;
+  level?: string;
   text: string;
-  page: number;
+  page?: number;
+}
+
+interface SectionItem {
+  heading: string;
+  text: string;
+  page?: number;
 }
 
 interface Outline {
-  title: string;
+  title?: string;
   outline: OutlineItem[];
 }
 
 interface PDF {
   id: string;
-  file: File;
   name: string;
-  size: number;
+  size?: number;
   uploadedAt: Date;
-  processed: boolean;
-  serverFilename: string;
-  outline: Outline | null;
+  serverFilename?: string;
+  processed?: boolean;
+  outline?: Outline;
+  sections?: SectionItem[];
 }
 
-interface PDFContextType {
+interface PDFContextShape {
   pdfs: PDF[];
-  addPDF: (file: File, serverFilename: string, outline: Outline) => void;
+  addPDF: (file: File, serverFilename: string, outline: Outline | null, sections?: SectionItem[]) => void;
   removePDF: (id: string) => void;
   getPDFById: (id: string) => PDF | undefined;
   isProcessing: (name: string) => boolean;
-  setProcessing: (name: string, processing: boolean) => void;
+  setProcessing: (name: string, val: boolean) => void;
 }
 
-const PDFContext = createContext<PDFContextType | undefined>(undefined);
+const PDFContext = createContext<PDFContextShape | null>(null);
 
-export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const PDFProvider = ({ children }: { children: ReactNode }) => {
   const [pdfs, setPDFs] = useState<PDF[]>([]);
-  const [processingPDFs, setProcessingPDFs] = useState<Set<string>>(new Set());
+  const [processing, setProc] = useState<Record<string, boolean>>({});
 
-  const addPDF = (file: File, serverFilename: string, outline: Outline) => {
+  const addPDF = (file: File, serverFilename: string, outline: Outline | null, sections?: SectionItem[]) => {
     const pdf: PDF = {
       id: uuidv4(),
-      file,
       name: file.name,
       size: file.size,
       uploadedAt: new Date(),
-      processed: true,
       serverFilename,
-      outline,
+      processed: true,
+      outline: outline ?? { title: file.name, outline: [] },
+      sections: sections ?? []
     };
-    setPDFs(prev => [...prev, pdf]);
-    setProcessingPDFs(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(file.name);
-      return newSet;
-    });
+    setPDFs(prev => [pdf, ...prev]);
   };
 
   const removePDF = (id: string) => {
-    setPDFs(prev => prev.filter(pdf => pdf.id !== id));
+    setPDFs(prev => prev.filter(p => p.id !== id));
   };
 
-  const getPDFById = (id: string) => {
-    return pdfs.find(pdf => pdf.id === id);
-  };
+  const getPDFById = (id: string) => pdfs.find(p => p.id === id);
 
-  const isProcessing = (name: string) => {
-    return processingPDFs.has(name);
-  };
-
-  const setProcessing = (name: string, processing: boolean) => {
-    setProcessingPDFs(prev => {
-      const newSet = new Set(prev);
-      if (processing) {
-        newSet.add(name);
-      } else {
-        newSet.delete(name);
-      }
-      return newSet;
-    });
-  };
+  const isProcessing = (name: string) => !!processing[name];
+  const setProcessing = (name: string, val: boolean) => setProc(prev => ({ ...prev, [name]: val }));
 
   return (
     <PDFContext.Provider
