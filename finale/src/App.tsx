@@ -5,6 +5,7 @@ import { PDFProvider } from './context/PDFContext';
 import UploadPage from './pages/UploadPage';
 import DocumentViewer from './pages/DocumentViewer';
 import QueryPage from './pages/QueryPage';
+import QueryDocumentViewer from './pages/QueryDocumentViewer';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -27,6 +28,7 @@ const App: React.FC = () => {
           <Route path="/" element={<UploadPage />} />
           <Route path="/query" element={<QueryPage />}/>
           <Route path="/document/:id" element={<DocumentViewer />} />
+          <Route path="/query/:id" element={<QueryDocumentViewer />} />
         </Routes>
       </Router>
     </PDFProvider>
