@@ -1,4 +1,53 @@
 import React, { useEffect, useState, useRef } from 'react';
+
+declare global {
+  interface Window {
+    AdobeDC: {
+      View: {
+        new (config: { clientId: string; divId: string }): AdobeDCView;
+        Enum: {
+          CallbackType: {
+            EVENT_LISTENER: string;
+          };
+        };
+      };
+    };
+  }
+}
+
+interface AdobeDCView {
+  previewFile(
+    fileConfig: {
+      content: {
+        location: {
+          url: string;
+        };
+      };
+      metaData: {
+        fileName: string;
+      };
+    },
+    viewerConfig: {
+      embedMode: string;
+      defaultViewMode: string;
+      showAnnotationTools: boolean;
+      
+      enableSearchAPIs: boolean, 
+      
+    }
+  ): Promise<any>;
+  
+  getAPIs(): Promise<{
+    gotoLocation: (location: { pageNumber: number }) => Promise<void>;
+  }>;
+  
+  registerCallback(
+    eventType: string,
+    callback: (event: any) => void,
+    options: { enablePageChangeEvents: boolean }
+  ): void;
+}
+
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -21,21 +70,21 @@ const DocumentViewer = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedSections, setExpandedSections] = useState(new Set(['Title', 'H1']));
   const [currentPage, setCurrentPage] = useState(1);
-  const adobeDCViewRef = useRef(null);
 
+  const viewerRef = useRef<any>(null);
   const pdf = id ? getPDFById(id) : undefined;
 
   useEffect(() => {
     if (pdf && pdf.serverFilename && window.AdobeDC) {
       const adobeDCView = new window.AdobeDC.View({
-        clientId: "b74eb08883f24e1c8ddc8125e8261df8", // Replace with your Adobe client ID
+        clientId: "35466cb0881f4c34abe4f6c105cfcf90",
         divId: "pdf-viewer",
       });
 
       adobeDCView.previewFile({
         content: {
           location: {
-            url: `http://localhost:5000/uploads/${pdf.serverFilename}`,
+            url: `http://localhost:5001/uploads/${pdf.serverFilename}`,
           },
         },
         metaData: {
@@ -45,22 +94,25 @@ const DocumentViewer = () => {
         embedMode: "FULL_WINDOW",
         defaultViewMode: "FIT_PAGE",
         showAnnotationTools: true,
+        enableSearchAPIs: true, 
+          
+           // This enables search functionality in the viewer
+      }).then((viewer: any) => {
+        viewerRef.current = viewer;
+
+        viewer.registerCallback(
+          window.AdobeDC.View.Enum.CallbackType.EVENT_LISTENER,
+          (event: any) => {
+            if (event.type === "PAGE_VIEW") {
+              setCurrentPage(event.data.pageNumber);
+            }
+          },
+          { enablePageChangeEvents: true }
+        );
       });
 
-      adobeDCView.registerCallback(
-        window.AdobeDC.View.Enum.CallbackType.EVENT_LISTENER,
-        (event) => {
-          if (event.type === "PAGE_VIEW") {
-            setCurrentPage(event.data.pageNumber);
-          }
-        },
-        { enablePageChangeEvents: true }
-      );
-
-      adobeDCViewRef.current = adobeDCView;
-
       return () => {
-        adobeDCViewRef.current = null;
+        viewerRef.current = null;
       };
     }
   }, [pdf]);
@@ -88,7 +140,7 @@ const DocumentViewer = () => {
     );
   }
 
-  const toggleSection = (section) => {
+  const toggleSection = (section: string) => {
     setExpandedSections(prev => {
       const newSet = new Set(prev);
       if (newSet.has(section)) {
@@ -100,20 +152,51 @@ const DocumentViewer = () => {
     });
   };
 
-  const handleHeadingClick = (page, text) => {
-    console.log("clicking the")
-    if (adobeDCViewRef.current) {
-      adobeDCViewRef.current.getAPIs().then((apis) => {
-        apis.searchText(text);  // Only this works properly
-      });
+  const handleHeadingClick = async (page: number, text: string) => {
+    //console.log("Navigating to heading:", text, "on page:", page);
+    console.log(page)
+    if (!viewerRef.current) {
+      console.error('Viewer not initialized');
+      return;
     }
-    if (window.innerWidth < 1024) setSidebarOpen(false);
+
+    try {
+      const apis = await viewerRef.current.getAPIs();
+      await apis.gotoLocation(page);
+      console.log(`Successfully navigated to page ${page}`);
+      // await apis.gotoLocation({ pageNumber: page });
+      // console.log(`Successfully navigated to page ${page}`);
+      
+      // Now, perform the search to highlight the text
+      const searchResult = await apis.search(text);
+
+      searchResult.onResultsUpdate = (result) => {
+          if (result.numMatches === 0) {
+              console.warn(`No matches found for "${text}" on page ${page}`);
+          } else {
+              console.log(`Found ${result.numMatches} matches for "${text}". Highlighting enabled.`);
+          }
+      };
+      
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      }
+    } catch (error) {
+      console.error('Error during navigation or search:', error);
+    }
   };
-  
-  
+
+  interface HeadingItem {
+    text: string;
+    page: number;
+  }
+
+  type GroupedHeadings = {
+    [key: string]: HeadingItem[];
+  };
 
   const groupHeadings = () => {
-    const grouped = {
+    const grouped: GroupedHeadings = {
       Title: [],
       H1: [],
       H2: [],
@@ -130,7 +213,7 @@ const DocumentViewer = () => {
     return grouped;
   };
 
-  const renderSection = (section, items) => {
+  const renderSection = (section: string, items: HeadingItem[]) => {
     const isExpanded = expandedSections.has(section);
     return (
       <div key={section} className="mb-2">
@@ -219,7 +302,7 @@ const DocumentViewer = () => {
                 </p>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[60vh]">
               {Object.entries(groupedHeadings).map(([section, items]) =>
                 items.length > 0 && renderSection(section, items)
               )}
@@ -277,7 +360,7 @@ const DocumentViewer = () => {
           <div className="max-w-5xl mx-auto h-full">
             <div
               id="pdf-viewer"
-              className="w-full h-full min-h-[600px] lg:min-h-[800px] bg-white rounded-2xl shadow-xl"
+              className="w-full h-full max-h-[70vh] bg-white rounded-2xl shadow-xl"
             />
           </div>
         </div>
