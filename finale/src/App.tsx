@@ -1,33 +1,10 @@
-// import React from 'react';
-// import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-// import { AnimatePresence } from 'framer-motion';
-// import UploadPage from './pages/UploadPage';
-// import DocumentViewer from './pages/DocumentViewer';
-// import { PDFProvider } from './PDFContext';
 
-// function App() {
-//   return (
-//     <PDFProvider>
-//       <Router>
-//         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-//           <AnimatePresence mode="wait">
-//             <Routes>
-//               <Route path="/" element={<UploadPage />} />
-//               <Route path="/document/:id" element={<DocumentViewer />} />
-//             </Routes>
-//           </AnimatePresence>
-//         </div>
-//       </Router>
-//     </PDFProvider>
-//   );
-// }
-
-// export default App;
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PDFProvider } from './context/PDFContext';
 import UploadPage from './pages/UploadPage';
 import DocumentViewer from './pages/DocumentViewer';
+import QueryPage from './pages/QueryPage';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -48,6 +25,7 @@ const App: React.FC = () => {
       <Router>
         <Routes>
           <Route path="/" element={<UploadPage />} />
+          <Route path="/query" element={<QueryPage />}/>
           <Route path="/document/:id" element={<DocumentViewer />} />
         </Routes>
       </Router>
