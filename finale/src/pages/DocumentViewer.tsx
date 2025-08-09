@@ -73,7 +73,8 @@ const DocumentViewer = () => {
 
   const viewerRef = useRef<any>(null);
   const pdf = id ? getPDFById(id) : undefined;
-
+  console.log(id)
+  console.log(pdf)
   useEffect(() => {
     if (pdf && pdf.serverFilename && window.AdobeDC) {
       const adobeDCView = new window.AdobeDC.View({
@@ -302,7 +303,7 @@ const DocumentViewer = () => {
                 </p>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[60vh]">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 max-h-[80vh]">
               {Object.entries(groupedHeadings).map(([section, items]) =>
                 items.length > 0 && renderSection(section, items)
               )}
@@ -360,7 +361,7 @@ const DocumentViewer = () => {
           <div className="max-w-5xl mx-auto h-full">
             <div
               id="pdf-viewer"
-              className="w-full h-full max-h-[70vh] bg-white rounded-2xl shadow-xl"
+              className="w-full h-full max-h-[90vh] bg-white rounded-2xl shadow-xl"
             />
           </div>
         </div>

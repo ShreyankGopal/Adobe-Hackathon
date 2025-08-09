@@ -135,6 +135,7 @@ interface PDFContextShape {
   addPDF: (file: File, serverFilename: string, outline: Outline | null, sections?: SectionItem[]) => void;
   removePDF: (id: string) => void;
   getPDFById: (id: string) => PDF | undefined;
+  getPDFByServerFilename: (serverFilename: string) => PDF | undefined;
   isProcessing: (name: string) => boolean;
   setProcessing: (name: string, val: boolean) => void;
 }
@@ -162,7 +163,7 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
   const removePDF = (id: string) => {
     setPDFs(prev => prev.filter(p => p.id !== id));
   };
-
+  const getPDFByServerFilename = (serverFilename: string) => pdfs.find(p => p.serverFilename === serverFilename);
   const getPDFById = (id: string) => pdfs.find(p => p.id === id);
 
   const isProcessing = (name: string) => !!processing[name];
@@ -170,7 +171,15 @@ export const PDFProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <PDFContext.Provider
-      value={{ pdfs, addPDF, removePDF, getPDFById, isProcessing, setProcessing }}
+      value={{
+        pdfs,
+        addPDF,
+        removePDF,
+        getPDFById,
+        getPDFByServerFilename,
+        isProcessing,
+        setProcessing
+      }}
     >
       {children}
     </PDFContext.Provider>
