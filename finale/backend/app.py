@@ -1,10 +1,10 @@
-
+# app.py
+# Replace your current app.py with this file. (Only backend changes.)
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
 from werkzeug.utils import secure_filename
 import logging
-import json
 from pathlib import Path
 import fitz  # PyMuPDF
 import pandas as pd
@@ -15,7 +15,6 @@ import time
 from datetime import datetime
 import numpy as np
 from RePDFBuilding import highlight_refined_texts
-# Sentence Transformers for embeddings + util.cos_sim for mmr
 from sentence_transformers import SentenceTransformer, util
 
 # Configure logging
@@ -25,12 +24,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Configuration
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf'}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-
-# Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -40,13 +36,12 @@ embedder = None
 def load_model():
     global model, embedder
     model_path = "heading_classifier_with_font_count_norm_textNorm_5.pkl"
-    if not Path(model_path).exists():
-        logger.error(f"Model file {model_path} not found!")
-    else:
+    if Path(model_path).exists():
         model = joblib.load(model_path)
         logger.info("Heading classifier model loaded successfully")
+    else:
+        logger.warning(f"Model file {model_path} not found!")
 
-    # Load the multilingual MiniLM model from local cache
     try:
         cached_path = Path("./cached_model")
         if cached_path.exists():
@@ -58,11 +53,13 @@ def load_model():
             embedder.save(str(cached_path))
             logger.info("Model downloaded and saved to ./cached_model")
     except Exception as e:
-        logger.error(f"Failed to load SentenceTransformer: {e}")
+        logger.exception(f"Failed to load SentenceTransformer: {e}")
         embedder = None
 
 
-# ---------------- PDF extraction utilities (same as before) ----------------
+# -------------------------
+# PDF text utilities
+# -------------------------
 def is_bullet_point(text):
     text = text.strip()
     bullet_patterns = [
@@ -101,7 +98,11 @@ def clean_text(text):
         text = re.sub(pattern, '', text)
     return text.strip()
 
-def extract_features(text, pdf_path, page_num, font_size, is_bold, is_italic, position_y, y_gap):
+
+# -------------------------
+# analyze_pdf_sections (produces both df for classifier AND lines_list mapping)
+# -------------------------
+def extract_features(text, pdf_path, page_num, font_size, is_bold, is_italic, position_y, y_gap, start_line=None, end_line=None):
     text_length = len(text)
     upper_count = sum(1 for c in text if c.isupper())
     total_alpha = sum(1 for c in text if c.isalpha())
@@ -110,7 +111,7 @@ def extract_features(text, pdf_path, page_num, font_size, is_bold, is_italic, po
     dot_match = re.match(r'^(\d+\.)+(\d+)', text)
     num_dots_in_prefix = dot_match.group(1).count('.') if dot_match else 0
 
-    return {
+    row = {
         'PDF Path': str(pdf_path),
         'Page Number': page_num,
         'Section Text': text,
@@ -124,90 +125,149 @@ def extract_features(text, pdf_path, page_num, font_size, is_bold, is_italic, po
         'Prefix Dot Count': num_dots_in_prefix,
         'Y Gap': y_gap
     }
+    # attach start/end line indexes for later mapping to rects
+    if start_line is not None:
+        row['Start Line'] = int(start_line)
+    if end_line is not None:
+        row['End Line'] = int(end_line)
+    return row
 
 def analyze_pdf_sections(pdf_path):
-    sections_data = []
+    """
+    Parse the PDF and return:
+      - df: DataFrame of grouped rows (for classifier). Each row contains Start Line and End Line.
+      - lines_list: list of per-physical-line dicts: { line_index, page, text, bbox }
+    """
+    grouped_rows = []   # will become rows for df (paragraph/group-level)
+    lines_list = []     # one entry per physical text line found in order
     try:
         doc = fitz.open(pdf_path)
-        for page_num in range(doc.page_count):
-            page = doc.load_page(page_num)
-            blocks = page.get_text("dict")['blocks']
+        line_counter = 0
 
+        for page_idx in range(doc.page_count):
+            page = doc.load_page(page_idx)
+            blocks = page.get_text("dict").get('blocks', [])
+
+            # For grouping we track a current group (list of text lines' indices and texts)
+            current_group_line_indices = []
+            current_group_texts = []
+            # representative style properties for current group (first line's style)
+            current_font_size = None
+            current_bold = None
+            current_italic = None
             prev_line_y = None
-            prev_font_size = None
-            prev_bold = None
-            prev_italic = None
-            current_lines = []
             prev_y_gap = None
 
             for block in blocks:
-                if block['type'] != 0:
+                if block.get('type') != 0:
                     continue
-
-                for line in block['lines']:
-                    spans = [s for s in line['spans'] if s['text'].strip()]
+                for line in block.get('lines', []):
+                    spans = [s for s in line.get('spans', []) if s.get('text','').strip()]
                     if not spans:
                         continue
 
                     line_text = " ".join(span['text'].strip() for span in spans)
                     if should_ignore_text(line_text):
                         continue
-                    cleaned_text = clean_text(line_text)
-                    if not cleaned_text or should_ignore_text(cleaned_text):
+                    cleaned = clean_text(line_text)
+                    if not cleaned:
                         continue
 
+                    # compute bbox for the physical line (union of spans)
+                    x0 = min(s['bbox'][0] for s in spans)
+                    y0 = min(s['bbox'][1] for s in spans)
+                    x1 = max(s['bbox'][2] for s in spans)
+                    y1 = max(s['bbox'][3] for s in spans)
+                    bbox = [x0, y0, x1, y1]
+
+                    # style info from first span of the line
                     first_span = spans[0]
-                    font_size = first_span['size']
-                    font_flags = first_span['flags']
+                    font_size = first_span.get('size', 0)
+                    font_flags = first_span.get('flags', 0)
                     is_bold = (font_flags & 16) > 0
                     is_italic = (font_flags & 2) > 0
-                    y_position = first_span['bbox'][1]
+                    y_pos = first_span['bbox'][1]
 
+                    # always append a physical line entry
+                    lines_list.append({
+                        'line_index': line_counter,
+                        'page': page_idx + 1,
+                        'text': cleaned,
+                        'bbox': bbox,
+                    })
+                    this_line_index = line_counter
+                    line_counter += 1
+
+                    # compute y gap relative to previous line (for features)
                     if prev_line_y is None:
                         y_gap = None
                     else:
-                        y_gap = abs(y_position - prev_line_y)
-                    prev_line_y = y_position
+                        y_gap = abs(y_pos - prev_line_y)
+                    prev_line_y = y_pos
 
-                    same_style = (
-                        prev_font_size is not None and
-                        abs(prev_font_size - font_size) < 0.5 and
-                        is_bold == prev_bold and
-                        is_italic == prev_italic
-                    )
-
-                    if same_style:
-                        current_lines.append(cleaned_text)
-                    else:
-                        if current_lines:
-                            full_text = " ".join(current_lines)
-                            if not should_ignore_text(full_text) and len(full_text.strip()) > 2:
-                                feat = extract_features(
-                                    full_text, pdf_path, page_num + 1,
-                                    prev_font_size, prev_bold, prev_italic, prev_line_y, prev_y_gap
-                                )
-                                sections_data.append(feat)
-
-                        current_lines = [cleaned_text]
-                        prev_font_size = font_size
-                        prev_bold = is_bold
-                        prev_italic = is_italic
+                    # decide whether to continue the current group or start a new group
+                    if current_font_size is None:
+                        # first line in group
+                        current_group_line_indices = [this_line_index]
+                        current_group_texts = [cleaned]
+                        current_font_size = font_size
+                        current_bold = is_bold
+                        current_italic = is_italic
                         prev_y_gap = y_gap
+                    else:
+                        same_style = (abs(current_font_size - font_size) < 0.5 and is_bold == current_bold and is_italic == current_italic)
+                        if same_style:
+                            # continue group
+                            current_group_line_indices.append(this_line_index)
+                            current_group_texts.append(cleaned)
+                        else:
+                            # finalize previous group into one grouped row
+                            full_text = " ".join(current_group_texts)
+                            if not should_ignore_text(full_text) and len(full_text.strip()) > 2:
+                                start_line = current_group_line_indices[0]
+                                end_line = current_group_line_indices[-1]
+                                feat = extract_features(full_text, pdf_path, page_idx + 1,
+                                                        current_font_size, current_bold, current_italic,
+                                                        prev_line_y, prev_y_gap, start_line=start_line, end_line=end_line)
+                                grouped_rows.append(feat)
+                            # start new group with this line
+                            current_group_line_indices = [this_line_index]
+                            current_group_texts = [cleaned]
+                            current_font_size = font_size
+                            current_bold = is_bold
+                            current_italic = is_italic
+                            prev_y_gap = y_gap
 
-            if current_lines:
-                full_text = " ".join(current_lines)
+            # finalize group's leftover at end of page
+            if current_group_texts:
+                full_text = " ".join(current_group_texts)
                 if not should_ignore_text(full_text) and len(full_text.strip()) > 2:
-                    feat = extract_features(
-                        full_text, pdf_path, page_num + 1,
-                        prev_font_size, prev_bold, prev_italic, prev_line_y, prev_y_gap
-                    )
-                    sections_data.append(feat)
+                    start_line = current_group_line_indices[0]
+                    end_line = current_group_line_indices[-1]
+                    feat = extract_features(full_text, pdf_path, page_idx + 1,
+                                            current_font_size, current_bold, current_italic,
+                                            prev_line_y, prev_y_gap, start_line=start_line, end_line=end_line)
+                    grouped_rows.append(feat)
+                # reset for next page
+                current_group_line_indices = []
+                current_group_texts = []
+                current_font_size = None
+                current_bold = None
+                current_italic = None
+                prev_y_gap = None
 
         doc.close()
     except Exception as e:
-        logger.error(f"Error processing {pdf_path}: {str(e)}")
-    return pd.DataFrame(sections_data)
+        logger.exception(f"Error processing {pdf_path}: {e}")
 
+    df = pd.DataFrame(grouped_rows)
+    return df, lines_list
+
+
+# -------------------------
+# unchanged helpers: preprocess_features, build_json_from_predictions, mmr
+# (copy your existing implementations; unchanged)
+# -------------------------
 def preprocess_features(df):
     if df.empty:
         return df
@@ -272,9 +332,6 @@ def build_json_from_predictions(df):
         "outline": outline
     }
 
-# -------------------------
-# MMR logic (from Extract_Section)
-# -------------------------
 def mmr(query_emb, sections, lambda_param=0.72, top_k=5):
     if not sections:
         return [], []
@@ -301,129 +358,10 @@ def mmr(query_emb, sections, lambda_param=0.72, top_k=5):
             remaining.remove(idx)
     return selected, sim_q
 
-@app.route('/role_query', methods=['POST'])
-def role_query():
-    try:
-        data = request.get_json(force=True)
-        if data is None:
-            return jsonify({"error": "Invalid JSON"}), 400
-
-        # Extract persona and job
-        persona = None
-        if isinstance(data.get('persona'), dict):
-            persona = data['persona'].get('role')
-        else:
-            persona = data.get('persona')
-
-        job = None
-        if isinstance(data.get('job_to_be_done'), dict):
-            job = data['job_to_be_done'].get('task')
-        else:
-            job = data.get('job_to_be_done')
-
-        if not persona or not job:
-            return jsonify({"error": "Missing persona or job_to_be_done"}), 400
-
-        documents = data.get('documents', [])
-        if not isinstance(documents, list):
-            return jsonify({"error": "documents must be a list"}), 400
-
-        if embedder is None:
-            return jsonify({"error": "Embedder not loaded on server"}), 500
-
-        query_text = f"{job} {persona}"
-        query_embedding = embedder.encode(query_text, normalize_embeddings=True)
-
-        # Build sections from supplied document.sections OR outline
-        section_data = []
-        for doc in documents:
-            filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
-            print("file name i am printing ", filename)
-            sections_list = doc.get('sections')  # prefer 'sections' created at upload time
-            #print("sections list i am printing ", sections_list)
-            if not sections_list:
-                # fallback to outline list: doc['outline']['outline'] (headings only)
-                outline_obj = doc.get('outline') or {}
-                sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
-
-            if not sections_list:
-                # no headings/sections for this doc — skip
-                continue
-
-            for item in sections_list:
-                # item might be either {heading,text,page} (sections) OR {level,text,page} (outline)
-                if 'text' in item and 'heading' in item:
-                    heading = item['heading']
-                    full_text = item['text']
-                    page = item.get('page')
-                elif 'text' in item and 'level' in item:
-                    heading = item['text']
-                    full_text = item['text']
-                    page = item.get('page')
-                else:
-                    # attempt best-effort
-                    heading = item.get('heading') or item.get('text') or str(item)
-                    full_text = item.get('text') or heading
-                    page = item.get('page')
-
-                emb = embedder.encode(full_text, normalize_embeddings=True)
-                section_data.append({
-                    'Document': filename,
-                    'Page': page if page is not None else -1,
-                    'heading': heading,
-                    'text': full_text,
-                    'embedding': emb
-                })
-
-        if not section_data:
-            return jsonify({"error": "No headings/sections found in supplied documents"}), 400
-
-        top_k = min(5, len(section_data))
-        selected_indices, sim_scores = mmr(query_embedding, section_data, top_k=top_k)
-
-        now = datetime.now().isoformat()
-        output = {
-            "metadata": {
-                "input_documents": [d.get('filename') for d in documents],
-                "persona": persona,
-                "job_to_be_done": job,
-                "processing_timestamp": now
-            },
-            "extracted_sections": [],
-            "subsection_analysis": []
-        }
-
-        for rank, idx in enumerate(selected_indices, start=1):
-            sec = section_data[idx]
-            output['extracted_sections'].append({
-                "document": sec['Document'],
-                "section_title": sec['heading'],
-                "importance_rank": rank,
-                "page_number": sec['Page']
-            })
-            output['subsection_analysis'].append({
-                "document": sec['Document'],
-                "refined_text": sec['text'],
-                "page_number": sec['Page']
-            })
-        highlight_refined_texts(output)
-        return jsonify(output)
-
-    except Exception as e:
-        logger.exception("Error in role_query")
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 # -------------------------
-# existing endpoints preserved and updated
+# upload endpoint: builds sections using df rows' Start/End line indices
 # -------------------------
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({
-        "status": "healthy",
-        "message": "PDF Analysis API is running",
-        "version": "1.0.0"
-    })
-
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     try:
@@ -451,8 +389,9 @@ def upload_pdf():
             os.remove(filepath)
             return jsonify({"error": "Model not loaded"}), 500
 
-        df = analyze_pdf_sections(filepath)
-        if df.empty:
+        # analyze: get grouped df (for classifier) and lines_list (per-line bboxes)
+        df, lines_list = analyze_pdf_sections(filepath)
+        if (df is None or df.empty) and not lines_list:
             os.remove(filepath)
             return jsonify({"error": "No extractable text"}), 400
 
@@ -468,31 +407,104 @@ def upload_pdf():
         ]
         df['Label'] = model.predict(df[features])
 
-        # Build outline (existing behaviour)
         structured_json = build_json_from_predictions(df)
 
-        # NEW: Build sections mapping using Title/H1/H2 as section starts (same logic as Extract_Section.py)
+        # Build sections mapping using Title/H1/H2 as section starts (but use Start/End Line indices
+        # from grouped df rows to collect all physical lines for the full section body)
         sections = []
         final_df = df.reset_index(drop=True)
         section_labels = ['Title', 'H1', 'H2']
         for i, row in final_df.iterrows():
             if row['Label'] in section_labels:
                 heading = row['Section Text']
-                body = []
+                # collect grouped rows texts until next heading
+                body_rows = []
+                body_start_line = None
+                body_end_line = None
                 for j in range(i + 1, len(final_df)):
                     next_row = final_df.iloc[j]
                     if next_row['Label'] in section_labels:
                         break
-                    body.append(next_row['Section Text'])
-                # join body. If no body lines, still include heading-only text.
-                full_text = heading + ("|" + "|".join(body) if body else "")
+                    body_rows.append(next_row['Section Text'])
+                    # get start/end line indices if present
+                    sline = next_row.get('Start Line', None)
+                    eline = next_row.get('End Line', None)
+                    if sline is not None:
+                        if body_start_line is None:
+                            body_start_line = int(sline)
+                        body_end_line = int(eline) if eline is not None else body_end_line
+
+                # If there were no body grouped rows, include nothing (heading-only)
+                # But always include heading text.
+                full_text = heading + (" " + " ".join(body_rows) if body_rows else "")
+
+                # Compute page numbers:
+                start_line = int(row.get('Start Line', -1)) if 'Start Line' in row else -1
+                end_line = body_end_line if body_end_line is not None else (int(row.get('End Line', -1)) if 'End Line' in row else start_line)
+                start_page = None
+                end_page = None
+                if start_line >= 0 and start_line < len(lines_list):
+                    start_page = lines_list[start_line]['page']
+                if end_line is not None and end_line >= 0 and end_line < len(lines_list):
+                    end_page = lines_list[end_line]['page']
+
+                # Gather all physical line indices for this section:
+                collected_line_indices = []
+                # include heading group lines:
+                if start_line is not None and start_line >= 0:
+                    # find the grouped row for the heading (it had Start/End Line)
+                    heading_sline = int(row.get('Start Line', start_line))
+                    heading_eline = int(row.get('End Line', start_line))
+                    collected_line_indices.extend(list(range(heading_sline, heading_eline + 1)))
+                # include body grouped lines by collecting the Start/End ranges for each body grouped row
+                if body_rows:
+                    for j in range(i + 1, i + 1 + len(body_rows)):
+                        br = final_df.iloc[j]
+                        bs = br.get('Start Line', None)
+                        be = br.get('End Line', None)
+                        if bs is not None and be is not None:
+                            collected_line_indices.extend(list(range(int(bs), int(be) + 1)))
+
+                # make per-page union bounding boxes from collected_line_indices
+                page_to_box = {}
+                for li in collected_line_indices:
+                    if li is None or li < 0 or li >= len(lines_list):
+                        continue
+                    rec = lines_list[li]
+                    p = rec['page']
+                    bbox = rec['bbox']
+                    if p not in page_to_box:
+                        page_to_box[p] = {
+                            'x0': bbox[0],
+                            'y0': bbox[1],
+                            'x1': bbox[2],
+                            'y1': bbox[3]
+                        }
+                    else:
+                        pb = page_to_box[p]
+                        pb['x0'] = min(pb['x0'], bbox[0])
+                        pb['y0'] = min(pb['y0'], bbox[1])
+                        pb['x1'] = max(pb['x1'], bbox[2])
+                        pb['y1'] = max(pb['y1'], bbox[3])
+
+                rects = []
+                for p, box in page_to_box.items():
+                    rects.append({
+                        "page": int(p),
+                        "bbox": [float(box['x0']), float(box['y0']), float(box['x1']), float(box['y1'])]
+                    })
+
                 sections.append({
                     "heading": heading,
                     "text": full_text,
-                    "page": int(row['Page Number'])
+                    "page": start_page if start_page is not None else int(row.get('Page Number', 1)),
+                    "start_line": start_line,
+                    "start_page": start_page,
+                    "end_line": end_line,
+                    "end_page": end_page,
+                    "rects": rects
                 })
 
-        # send both outline and sections in response
         response_payload = {
             "success": True,
             "filename": filename,
@@ -504,12 +516,153 @@ def upload_pdf():
         return jsonify(response_payload)
 
     except Exception as e:
-        logger.error(f"Error processing upload: {str(e)}")
+        logger.exception(f"Error processing upload: {str(e)}")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
+
+# -------------------------
+# role_query endpoint (for completeness) - unchanged in behavior except now sections include rects
+# -------------------------
+@app.route('/role_query', methods=['POST'])
+def role_query():
+    try:
+        data = request.get_json(force=True)
+        if data is None:
+            return jsonify({"error": "Invalid JSON"}), 400
+
+        persona = None
+        if isinstance(data.get('persona'), dict):
+            persona = data['persona'].get('role')
+        else:
+            persona = data.get('persona')
+
+        job = None
+        if isinstance(data.get('job_to_be_done'), dict):
+            job = data['job_to_be_done'].get('task')
+        else:
+            job = data.get('job_to_be_done')
+
+        if not persona or not job:
+            return jsonify({"error": "Missing persona or job_to_be_done"}), 400
+
+        documents = data.get('documents', [])
+        if not isinstance(documents, list):
+            return jsonify({"error": "documents must be a list"}), 400
+
+        if embedder is None:
+            return jsonify({"error": "Embedder not loaded on server"}), 500
+
+        query_text = f"{job} {persona}"
+        query_embedding = embedder.encode(query_text, normalize_embeddings=True)
+
+        section_data = []
+        for doc in documents:
+            filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
+            sections_list = doc.get('sections')
+            if not sections_list:
+                outline_obj = doc.get('outline') or {}
+                sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
+
+            if not sections_list:
+                continue
+
+            for item in sections_list:
+                if isinstance(item, dict) and 'text' in item and 'heading' in item:
+                    heading = item['heading']
+                    full_text = item['text']
+                    page = item.get('page')
+                    rects = item.get('rects', [])
+                    start_line = item.get('start_line')
+                    end_line = item.get('end_line')
+                    start_page = item.get('start_page')
+                    end_page = item.get('end_page')
+                elif isinstance(item, dict) and 'text' in item and 'level' in item:
+                    heading = item['text']
+                    full_text = item['text']
+                    page = item.get('page')
+                    rects = []
+                    start_line = end_line = start_page = end_page = None
+                else:
+                    heading = item.get('heading') if isinstance(item, dict) else str(item)
+                    full_text = item.get('text') if isinstance(item, dict) else heading
+                    page = item.get('page') if isinstance(item, dict) else None
+                    rects = item.get('rects') if isinstance(item, dict) else []
+                    start_line = item.get('start_line') if isinstance(item, dict) else None
+                    end_line = item.get('end_line') if isinstance(item, dict) else None
+                    start_page = item.get('start_page') if isinstance(item, dict) else None
+                    end_page = item.get('end_page') if isinstance(item, dict) else None
+
+                emb = embedder.encode(full_text, normalize_embeddings=True)
+                section_data.append({
+                    'Document': filename,
+                    'Page': page if page is not None else -1,
+                    'heading': heading,
+                    'text': full_text,
+                    'embedding': emb,
+                    'rects': rects,
+                    'start_line': start_line,
+                    'end_line': end_line,
+                    'start_page': start_page,
+                    'end_page': end_page
+                })
+
+        if not section_data:
+            return jsonify({"error": "No headings/sections found in supplied documents"}), 400
+
+        top_k = min(5, len(section_data))
+        selected_indices, sim_scores = mmr(query_embedding, section_data, top_k=top_k)
+
+        now = datetime.now().isoformat()
+        output = {
+            "metadata": {
+                "input_documents": [d.get('filename') for d in documents],
+                "persona": persona,
+                "job_to_be_done": job,
+                "processing_timestamp": now
+            },
+            "extracted_sections": [],
+            "subsection_analysis": []
+        }
+
+        for rank, idx in enumerate(selected_indices, start=1):
+            sec = section_data[idx]
+            output['extracted_sections'].append({
+                "document": sec['Document'],
+                "section_title": sec['heading'],
+                "importance_rank": rank,
+                "page_number": sec['Page'],
+                "rects": sec.get('rects', []),
+                "start_line": sec.get('start_line'),
+                "end_line": sec.get('end_line'),
+                "start_page": sec.get('start_page'),
+                "end_page": sec.get('end_page')
+            })
+            output['subsection_analysis'].append({
+                "document": sec['Document'],
+                "refined_text": sec['text'],
+                "page_number": sec['Page'],
+                "rects": sec.get('rects', []),
+                "start_line": sec.get('start_line'),
+                "end_line": sec.get('end_line'),
+                "start_page": sec.get('start_page'),
+                "end_page": sec.get('end_page')
+            })
+
+        
+        annotated_map = highlight_refined_texts(output)  # returns { original_filename: annotated_filename, ... }
+# attach to metadata so frontend can use annotated copies
+        output['metadata']['annotated_files'] = annotated_map
+        return jsonify(output)
+
+    except Exception as e:
+        logger.exception("Error in role_query")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 
 @app.route('/uploads/<filename>', methods=['GET'])
 def serve_pdf(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 
 @app.route('/files', methods=['GET'])
 def list_files():
@@ -530,12 +683,10 @@ def list_files():
             "count": len(files)
         })
     except Exception as e:
-        logger.error(f"Error listing files: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
+        logger.exception("Error listing files")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 
 if __name__ == '__main__':
     load_model()
     app.run(debug=True, host='0.0.0.0', port=5001)
-
-
-

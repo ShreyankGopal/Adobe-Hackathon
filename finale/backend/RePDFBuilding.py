@@ -1,55 +1,109 @@
+# RePDFBuilding.py
 import fitz
 import os
+from collections import defaultdict
+from datetime import datetime
 
 def highlight_refined_texts(output):
-    print("Rebuilding PDF with annotations")
+    """
+    Create annotated copies of PDFs with highlights for the selected sections.
+    - For each document in output['extracted_sections'], we create a copy of the original PDF
+      (uploads/annotated_<timestamp>_<origfile>) and add highlight annotations per rect.
+    - We DO NOT modify the original PDF.
+    - Returns a mapping: { "original_filename.pdf": "annotated_<ts>_original_filename.pdf", ... }
+    """
+    print("[RePDFBuilding] Starting highlight -> annotated-copy process")
+    files = defaultdict(list)
+
     for sec in output.get("extracted_sections", []):
-        filename = sec['document']
-        page_num = sec['page_number']
-        section_title = sec['section_title']
-        print(page_num)
-        if not section_title:
+        fname = sec.get('document')
+        if not fname:
+            continue
+        files[fname].append(sec)
+
+    annotated_map = {}  # original_filename -> annotated_filename
+
+    for fname, sections in files.items():
+        src_path = os.path.join("uploads", fname)
+        if not os.path.exists(src_path):
+            print(f"[RePDFBuilding] Skipping missing file: {src_path}")
             continue
 
-        pdf_path = os.path.join("./uploads", filename)
-        if not os.path.exists(pdf_path):
+        try:
+            src_doc = fitz.open(src_path)
+        except Exception as e:
+            print(f"[RePDFBuilding] Failed to open {src_path}: {e}")
             continue
 
-        doc = fitz.open(pdf_path)
-        if page_num < 0 or page_num >= len(doc):
-            doc.close()
-            continue
+        # create a copy document in memory by inserting pages into a new doc
+        new_doc = fitz.open()
+        new_doc.insert_pdf(src_doc)  # duplicate all pages
 
-        page = doc[page_num-1]
+        modified = False
 
-        # Get page text and perform case-insensitive search
-        page_text = page.get_text("text")
-        search_term = section_title.lower()
-        page_text_lower = page_text.lower()
-        print("search term", search_term)
-        print("page text", page_text_lower)
-        # Find the position in the lowercased text
-        start_index = page_text_lower.find(search_term)
-        
-        if start_index == -1:
-            doc.close()
-            continue
-        print("start index", start_index)
-        # Get the actual text (with original case) for highlighting
-        end_index = min(start_index + len(search_term) + 500, len(page_text))
-        print("end index", end_index)
-        actual_text = page_text[start_index:end_index]
-        print("actual text", actual_text)
-        
-        # Search for the exact text (with original case) to highlight
-        matches = page.search_for(actual_text)
-        if not matches:
-            doc.close()
-            continue
-            
-        # Highlight all matches found
-        for rect in matches:
-            page.add_highlight_annot(rect)
+        for sec in sections:
+            rects = sec.get('rects', []) or []
+            page_hint = sec.get('page_number', None)
 
-        doc.save(pdf_path, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
-        doc.close()
+            if rects:
+                for r in rects:
+                    try:
+                        # dict rect with page & bbox expected
+                        if isinstance(r, dict) and 'page' in r and 'bbox' in r:
+                            pnum = int(r['page'])
+                            bbox = r['bbox']
+                            if pnum < 1 or pnum > len(new_doc):
+                                continue
+                            page = new_doc[pnum - 1]
+                            if not (isinstance(bbox, (list, tuple)) and len(bbox) == 4):
+                                continue
+                            rect = fitz.Rect(float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+                            try:
+                                annot = page.add_highlight_annot(rect)
+                                if annot:
+                                    annot.update()
+                                    modified = True
+                            except Exception as e:
+                                print(f"[RePDFBuilding] Annot failure {fname}:{pnum} -> {e}")
+                                continue
+                        else:
+                            # legacy: list rect + page_hint
+                            if isinstance(r, (list, tuple)) and len(r) == 4 and page_hint:
+                                pnum = int(page_hint)
+                                if pnum >= 1 and pnum <= len(new_doc):
+                                    page = new_doc[pnum - 1]
+                                    rect = fitz.Rect(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
+                                    try:
+                                        annot = page.add_highlight_annot(rect)
+                                        if annot:
+                                            annot.update()
+                                            modified = True
+                                    except Exception as e:
+                                        print(f"[RePDFBuilding] Legacy annot error {fname}:{pnum} -> {e}")
+                                        continue
+                    except Exception as e:
+                        print(f"[RePDFBuilding] Unexpected error processing rect {r} for {fname}: {e}")
+                        continue
+            else:
+                # if no rects present, skip (we intentionally avoid fuzzy string matching)
+                print(f"[RePDFBuilding] No rects for section '{sec.get('section_title')}' in {fname}; skipping.")
+
+        if modified:
+            ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+            annotated_name = f"annotated_{ts}_{fname}"
+            annotated_path = os.path.join("uploads", annotated_name)
+            try:
+                # save annotated copy (do not overwrite original)
+                new_doc.save(annotated_path)
+                annotated_map[fname] = annotated_name
+                print(f"[RePDFBuilding] Saved annotated copy: {annotated_path}")
+            except Exception as e:
+                print(f"[RePDFBuilding] Failed to save annotated copy for {fname}: {e}")
+        else:
+            print(f"[RePDFBuilding] No modifications for {fname}; no annotated file created.")
+
+        new_doc.close()
+        src_doc.close()
+
+    print("[RePDFBuilding] Finished highlighting. Annotated map:", annotated_map)
+    return annotated_map
