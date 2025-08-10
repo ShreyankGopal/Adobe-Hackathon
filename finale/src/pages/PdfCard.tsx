@@ -71,7 +71,7 @@ const PdfCard: React.FC<Props> = ({ pdf, onRemove, onClick, isProcessing }) => {
 
       <div className="aspect-[3/4] bg-gradient-to-br from-red-50 via-orange-50 to-red-100 rounded-t-xl flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-red-100/50 to-orange-100/50" />
-        <FileText className="w-16 h-16 text-red-500 relative z-10" />
+        <FileText className="w-16 h-16 text-sailor-500 relative z-10" />
         {processing && (
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse-slow" />
         )}
