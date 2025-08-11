@@ -16,11 +16,13 @@ from datetime import datetime
 import numpy as np
 from RePDFBuilding import highlight_refined_texts
 from sentence_transformers import SentenceTransformer, util
+from llmProvider import LLMClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+# Initialize LLM client
+llm=LLMClient()
 app = Flask(__name__)
 CORS(app)
 
@@ -662,7 +664,29 @@ def role_query():
 @app.route('/uploads/<filename>', methods=['GET'])
 def serve_pdf(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+#----------------------------- LLM Route handling --------------------------------------#
+@app.route('/<task>', methods=['POST'])
+def generate(task):
+    try:
+        print(task)
+        data = request.get_json()
+        if not data or 'prompt' not in data:
+            return jsonify({"error": "Missing prompt"}), 400
 
+        prompt = data['prompt']
+
+        if task == "did-you-know":
+            prompt = f"Give me a 'Did You Know?' fact about the following text:\n\n{prompt}"
+        elif task == "summarize":
+            prompt = f"Summarize the following text clearly and concisely:\n\n{prompt}"
+        elif task != "generate":
+            return jsonify({"error": "Invalid task"}), 400
+
+        response = llm.generate(prompt)
+        return jsonify({"response": response})
+    except Exception as e:
+        logger.exception("Error in generate")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 @app.route('/files', methods=['GET'])
 def list_files():
