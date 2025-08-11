@@ -11,9 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
-
+/backend/.env
 # Python virtual environment
 /backend/venv/
+/backend/CredPath.json
 
 # Editor directories and files
 .vscode/*

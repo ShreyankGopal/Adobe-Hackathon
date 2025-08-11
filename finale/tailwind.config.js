@@ -6,6 +6,12 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        sailor: "#003366",
+        mint: "#98FF98",
+      }
+    },
+    extend: {
+      colors: {
         primary: {
           50: '#eff6ff',
           100: '#dbeafe',
