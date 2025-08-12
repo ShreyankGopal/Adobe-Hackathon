@@ -94,9 +94,9 @@ const UploadPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#003366] via-[#004080] to-[#66FFCC]">
+    <div className="min-h-screen bg-[#A2E2CC]">
       {/* Navbar */}
-      <nav className="bg-gradient-to-r from-[#001F33] to-[#00334D] p-4 shadow-lg">
+      <nav className="bg-gradient-to-r from-[#001F33] via-[#002147] to-[#00334D] p-4 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <Link
             to="/"
@@ -116,10 +116,10 @@ const UploadPage: React.FC = () => {
       <motion.div initial="hidden" animate="visible" variants={containerVariants} className="p-4 sm:p-6 lg:p-8">
         <div className="max-w-7xl mx-auto mb-8">
           <motion.div variants={itemVariants} className="text-center">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-4 drop-shadow-md">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-[#0F2B2E] mb-4 drop-shadow-md">
               PDF Analysis Tool
             </h1>
-            <p className="text-lg sm:text-xl text-white/90 max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-[#0F2B2E] max-w-2xl mx-auto">
               Upload your PDFs for AI-powered analysis
             </p>
           </motion.div>
@@ -172,8 +172,8 @@ const UploadPage: React.FC = () => {
         {pdfs.length > 0 && (
           <motion.div variants={itemVariants} className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl sm:text-3xl font-semibold text-white">Uploaded PDFs ({pdfs.length})</h2>
-              <div className="text-lg text-white">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-[#0F2B2E]">Uploaded PDFs ({pdfs.length})</h2>
+              <div className="text-lg text-[#0F2B2E]">
                 Total size: {formatFileSize(pdfs.reduce((sum, p) => sum + (p.size || 0), 0))}
               </div>
             </div>
@@ -205,11 +205,11 @@ const UploadPage: React.FC = () => {
         {pdfs.length === 0 && (
           <motion.div variants={itemVariants} className="text-center py-12">
             <div className="max-w-md mx-auto">
-              <div className="w-24 h-24 bg-gradient-to-br from-mint-100 to-sailor-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <div className="w-24 h-24 bg-[#A2E2CC] border-4 border-[#0F2B2E] rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
                 <FileText className="w-12 h-12 text-mint-400" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">No PDFs uploaded yet</h3>
-              <p className="text-mint-200">Upload your first PDF to get started with AI-powered document analysis</p>
+              <h3 className="text-xl font-semibold text-[#0F2B2E] mb-2">No PDFs uploaded yet</h3>
+              <p className="text-[#0F2B2E]">Upload your first PDF to get started with AI-powered document analysis</p>
             </div>
           </motion.div>
         )}
