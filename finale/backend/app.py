@@ -17,6 +17,11 @@ import numpy as np
 from RePDFBuilding import highlight_refined_texts
 from sentence_transformers import SentenceTransformer, util
 from llmProvider import LLMClient
+from litellm import completion
+import traceback
+from werkzeug.utils import secure_filename
+from gtts import gTTS
+import os, time, traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -652,7 +657,28 @@ def role_query():
 
         
         annotated_map = highlight_refined_texts(output)  # returns { original_filename: annotated_filename, ... }
-# attach to metadata so frontend can use annotated copies
+
+        # Build the text for LLM podcast summarization, preserving importance order
+        sections_formatted = "\n\n".join(
+            f"Section {i+1} (Rank {sec.get('importance_rank', '?')}): {sec.get('section_title', 'Untitled')}\n{sec['refined_text']}"
+            for i, sec in enumerate(sorted(output['subsection_analysis'], key=lambda x: x.get('importance_rank', 999)))
+            if sec.get('refined_text')
+        )
+
+        # Craft the podcast-style prompt
+        llm_prompt = f"""I am a {persona}.
+        Task: {job}.
+
+        Below are the most relevant extracted sections from the source documents:
+
+        {sections_formatted}
+
+        """
+
+        # Store in metadata so downstream processes can use it
+        output['metadata']['llm_prompt'] = llm_prompt
+
+        # attach to metadata so frontend can use annotated copies
         output['metadata']['annotated_files'] = annotated_map
         return jsonify(output)
 
@@ -676,9 +702,9 @@ def generate(task):
         prompt = data['prompt']
 
         if task == "did-you-know":
-            prompt = f"Give me a 'Did You Know?' fact about the following text:\n\n{prompt}"
+            prompt = f"{prompt} Ignore the task, only give me a 'Did You Know?' fact about the given relevant sections. Do not write 'Did You Know?' in your response. Add an exclamation mark at the end of your fact."
         elif task == "summarize":
-            prompt = f"Summarize the following text clearly and concisely:\n\n{prompt}"
+            prompt = f"{prompt} Summarize the mentioned relvant sections clearly and concisely. Format the result text well, leaving lines between paragraphs."
         elif task != "generate":
             return jsonify({"error": "Invalid task"}), 400
 
@@ -709,6 +735,46 @@ def list_files():
     except Exception as e:
         logger.exception("Error listing files")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
+AUDIO_DIR = os.path.join("static", "audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+@app.route("/podcast", methods=["POST"])
+def podcast():
+    try:
+        data = request.get_json()
+        if isinstance(data, str):
+            podcast_input = data
+        else:
+            podcast_input = data.get("podcast_input") or data.get("prompt")
+
+        if not podcast_input:
+            return jsonify({"error": "Missing podcast_input"}), 400
+
+        # 1. Generate podcast script with Gemini
+        podcast_prompt = podcast_input + f"""Please create a concise and engaging 2-minute summary of this content, as if you’re having a one-on-one conversation with me. Focus only on the text you want to share—no meta commentary or formatting. 
+
+        Make it fun, insightful, and professional by including surprising facts, clever observations, or notable highlights related to the data. Keep the response simple and plain—no bold or special formatting. 
+
+        Use line breaks to separate paragraphs for easy reading."""
+
+        script_text = llm.generate(podcast_prompt)  # your existing Gemini wrapper
+
+        # 2. Convert script to audio with gTTS (fast & free)
+        tts = gTTS(text=script_text, lang="en", slow=False)
+        filename = secure_filename(f"podcast_{int(time.time())}.mp3")
+        file_path = os.path.join(AUDIO_DIR, filename)
+        tts.save(file_path)
+
+        # 3. Return JSON with script & audio URL
+        return jsonify({
+            "script": script_text,
+            "audio_url": f"http://localhost:5001/static/audio/{filename}"
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':

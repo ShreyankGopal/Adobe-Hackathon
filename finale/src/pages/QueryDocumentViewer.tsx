@@ -45,17 +45,20 @@ interface SubsectionAnalysis {
   refined_text: string;
 }
 
-interface QueryResult {
-  extracted_sections: ExtractedSection[];
-  subsection_analysis?: SubsectionAnalysis[];
-  metadata?: {
-    input_documents?: string[];
-    job_to_be_done?: string;
-    persona?: string;
-    processing_timestamp?: string;
-    annotated_files?: { [original: string]: string };
-  };
-}
+declare global {
+  interface QueryResult {
+    extracted_sections: ExtractedSection[];
+    subsection_analysis?: SubsectionAnalysis[];
+    metadata?: {
+      input_documents?: string[];
+      job_to_be_done?: string;
+      persona?: string;
+      processing_timestamp?: string;
+      annotated_files?: { [original: string]: string };
+      llm_input: string;
+    };
+  }
+};
 
 const QueryDocumentViewer: React.FC = () => {
   const { id } = useParams();
