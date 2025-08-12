@@ -22,7 +22,7 @@ const RoleQueryPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
+  const [ranks,setRanks]=useState<any>(null)
   const handleRemovePDF = (id: string | number) => {
     removePDF(id as string);
   };
@@ -54,6 +54,7 @@ const RoleQueryPage: React.FC = () => {
     const payload = {
       persona: { role: role.trim() },
       job_to_be_done: { task: task.trim() },
+      numRanks: parseInt(ranks, 10),
       documents: documentsPayload
     };
 
@@ -72,6 +73,7 @@ const RoleQueryPage: React.FC = () => {
 
       const data = await resp.json();
       setResult(data);
+      
     } catch (err: any) {
       setError(err.message || 'Unknown error');
     } finally {
@@ -82,9 +84,9 @@ const RoleQueryPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
       {/* Enhanced Navigation */}
-      <nav className="bg-white/80 backdrop-blur-md border border-white/20 p-3 rounded-xl shadow-lg mb-4">
+      <nav className="bg-[#002147] backdrop-blur-md border border-[#002147]/20 p-3 rounded-xl shadow-lg mb-4">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <Link to="/" className="text-slate-800 font-semibold hover:text-indigo-600 transition-colors">
+          <Link to="/" className="text-white font-semibold transition-all duration-200 ease-in-out hover:scale-105">
             Home
           </Link>
           <Link to="/query" className="text-indigo-600 font-semibold bg-indigo-50 px-3 py-1 rounded-lg">
@@ -122,6 +124,20 @@ const RoleQueryPage: React.FC = () => {
                 rows={2}
               />
             </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Number of Ranks
+              </label>
+              <input
+                type="number"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                value={ranks}
+                onChange={(e) => setRanks(e.target.value)}
+                placeholder="e.g., 5"
+                min="0"
+              />
+            </div>
+
 
             <button
               type="submit"

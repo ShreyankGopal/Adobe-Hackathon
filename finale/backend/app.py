@@ -338,8 +338,10 @@ def build_json_from_predictions(df):
         "title": title_text,
         "outline": outline
     }
-
-def mmr(query_emb, sections, lambda_param=0.72, top_k=5):
+# -------------------------
+# mmr function: implements MMR algorithm for section selection
+# -------------------------
+def mmr(query_emb, sections, lambda_param, top_k):
     if not sections:
         return [], []
 
@@ -558,7 +560,7 @@ def role_query():
 
         if embedder is None:
             return jsonify({"error": "Embedder not loaded on server"}), 500
-
+        numRanks=data.get('numRanks')
         query_text = f"{job} {persona}"
         query_embedding = embedder.encode(query_text, normalize_embeddings=True)
 
@@ -616,8 +618,8 @@ def role_query():
         if not section_data:
             return jsonify({"error": "No headings/sections found in supplied documents"}), 400
 
-        top_k = min(5, len(section_data))
-        selected_indices, sim_scores = mmr(query_embedding, section_data, top_k=top_k)
+        top_k = min(numRanks, len(section_data))
+        selected_indices, sim_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k)
 
         now = datetime.now().isoformat()
         output = {
@@ -738,6 +740,8 @@ def list_files():
 
 AUDIO_DIR = os.path.join("static", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+#---------------------   PodCast -----------------------------------#
 
 @app.route("/podcast", methods=["POST"])
 def podcast():
