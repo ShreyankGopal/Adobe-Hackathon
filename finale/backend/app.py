@@ -366,11 +366,38 @@ def mmr(query_emb, sections, lambda_param, top_k):
             selected.append(idx)
             remaining.remove(idx)
     return selected, sim_q
+#--------------------------------------- #
+#     only to upload file                #
+#--------------------------------------- #
+@app.route('/upload-only-file', methods=['POST'])
+def upload_only_file():
+    try:
+        if 'pdf' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
 
+        file = request.files['pdf']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
 
-# -------------------------
+        if file and '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() not in ALLOWED_EXTENSIONS:
+            return jsonify({"error": "Invalid file type. Only PDF files are allowed"}), 400
+
+        if request.content_length and request.content_length > MAX_FILE_SIZE:
+            return jsonify({"error": "File too large. Maximum size is 50MB"}), 400
+
+        filename = secure_filename(file.filename)
+        
+        
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        logger.info(f"Uploaded file: {filename}")
+        return jsonify({"filename": filename, "filepath": filepath}), 200
+    except Exception as e:
+        logger.error(f"Error uploading file: {e}")
+        return jsonify({"error": "Error uploading file"}), 500
+ #--------------------------------------- #
 # upload endpoint: builds sections using df rows' Start/End line indices
-# -------------------------
+#--------------------------------------- #
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
     try:
@@ -528,7 +555,146 @@ def upload_pdf():
         logger.exception(f"Error processing upload: {str(e)}")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
+#--------------------------------------- #
+#     pdf_query endpoint                 #
+#--------------------------------------- #
 
+@app.route('/pdf_query', methods=['POST'])
+def pdf_query():
+    try:
+        data = request.get_json(force=True)
+        if data is None:
+            return jsonify({"error": "Invalid JSON"}), 400
+        selectedText=data.get('selectedText')
+        documents = data.get('documents', [])
+        if not isinstance(documents, list):
+            return jsonify({"error": "documents must be a list"}), 400
+
+        if embedder is None:
+            return jsonify({"error": "Embedder not loaded on server"}), 500
+        query_text = selectedText
+        query_embedding = embedder.encode(query_text, normalize_embeddings=True)
+
+        section_data = []
+        for doc in documents:
+            print(doc)
+            filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
+            sections_list = doc.get('sections')
+            if not sections_list:
+                outline_obj = doc.get('outline') or {}
+                sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
+
+            if not sections_list:
+                continue
+
+            for item in sections_list:
+                if isinstance(item, dict) and 'text' in item and 'heading' in item:
+                    heading = item['heading']
+                    full_text = item['text']
+                    page = item.get('page')
+                    rects = item.get('rects', [])
+                    start_line = item.get('start_line')
+                    end_line = item.get('end_line')
+                    start_page = item.get('start_page')
+                    end_page = item.get('end_page')
+                elif isinstance(item, dict) and 'text' in item and 'level' in item:
+                    heading = item['text']
+                    full_text = item['text']
+                    page = item.get('page')
+                    rects = []
+                    start_line = end_line = start_page = end_page = None
+                else:
+                    heading = item.get('heading') if isinstance(item, dict) else str(item)
+                    full_text = item.get('text') if isinstance(item, dict) else heading
+                    page = item.get('page') if isinstance(item, dict) else None
+                    rects = item.get('rects') if isinstance(item, dict) else []
+                    start_line = item.get('start_line') if isinstance(item, dict) else None
+                    end_line = item.get('end_line') if isinstance(item, dict) else None
+                    start_page = item.get('start_page') if isinstance(item, dict) else None
+                    end_page = item.get('end_page') if isinstance(item, dict) else None
+
+                emb = embedder.encode(full_text, normalize_embeddings=True)
+                section_data.append({
+                    'Document': filename,
+                    'Page': page if page is not None else -1,
+                    'heading': heading,
+                    'text': full_text,
+                    'embedding': emb,
+                    'rects': rects,
+                    'start_line': start_line,
+                    'end_line': end_line,
+                    'start_page': start_page,
+                    'end_page': end_page
+                })
+
+        if not section_data:
+            return jsonify({"error": "No headings/sections found in supplied documents"}), 400
+
+        top_k = min(5,len(section_data))
+        selected_indices, sim_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k)
+
+        now = datetime.now().isoformat()
+        output = {
+            "metadata": {
+                "input_documents": [d.get('filename') for d in documents],
+                "selected_text": selectedText,
+                "processing_timestamp": now
+            },
+            "extracted_sections": [],
+            "subsection_analysis": []
+        }
+
+        for rank, idx in enumerate(selected_indices, start=1):
+            sec = section_data[idx]
+            output['extracted_sections'].append({
+                "document": sec['Document'],
+                "section_title": sec['heading'],
+                "importance_rank": rank,
+                "page_number": sec['Page'],
+                "rects": sec.get('rects', []),
+                "start_line": sec.get('start_line'),
+                "end_line": sec.get('end_line'),
+                "start_page": sec.get('start_page'),
+                "end_page": sec.get('end_page')
+            })
+            output['subsection_analysis'].append({
+                "document": sec['Document'],
+                "refined_text": sec['text'],
+                "page_number": sec['Page'],
+                "rects": sec.get('rects', []),
+                "start_line": sec.get('start_line'),
+                "end_line": sec.get('end_line'),
+                "start_page": sec.get('start_page'),
+                "end_page": sec.get('end_page')
+            })
+
+        
+        annotated_map = highlight_refined_texts(output)  # returns { original_filename: annotated_filename, ... }
+
+        # Build the text for LLM podcast summarization, preserving importance order
+        sections_formatted = "\n\n".join(
+            f"Section {i+1} (Rank {sec.get('importance_rank', '?')}): {sec.get('section_title', 'Untitled')}\n{sec['refined_text']}"
+            for i, sec in enumerate(sorted(output['subsection_analysis'], key=lambda x: x.get('importance_rank', 999)))
+            if sec.get('refined_text')
+        )
+
+        # Craft the podcast-style prompt
+        llm_prompt = f"""Below are the most relevant extracted sections from the source documents:
+
+        {sections_formatted}
+
+        """
+
+        # Store in metadata so downstream processes can use it
+        output['metadata']['llm_prompt'] = llm_prompt
+
+        # attach to metadata so frontend can use annotated copies
+        output['metadata']['annotated_files'] = annotated_map
+        return jsonify(output)
+
+    except Exception as e:
+        logger.exception("Error in role_query")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 # -------------------------
 # role_query endpoint (for completeness) - unchanged in behavior except now sections include rects
 # -------------------------
@@ -688,10 +854,20 @@ def role_query():
         logger.exception("Error in role_query")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
-
-@app.route('/uploads/<filename>', methods=['GET'])
+@app.route('/uploads/<path:filename>', methods=['GET'])
 def serve_pdf(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    safe_name = secure_filename(filename)
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_name)
+
+    if not os.path.exists(file_path):
+        print(f"File '{safe_name}' not found")
+        return jsonify({"error": f"File '{safe_name}' not found"}), 404
+
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], safe_name)
+    except Exception as e:
+        app.logger.error(f"Error serving PDF '{safe_name}': {e}")
+        return jsonify({"error": f"Error serving PDF: {str(e)}"}), 500
 #----------------------------- LLM Route handling --------------------------------------#
 @app.route('/<task>', methods=['POST'])
 def generate(task):
