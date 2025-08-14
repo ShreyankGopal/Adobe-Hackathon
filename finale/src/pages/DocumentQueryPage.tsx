@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { usePDF } from '../context/PDFContext';
 import PdfCard from './PdfCard';
 import { useNavigate } from 'react-router-dom';
+import { output } from 'framer-motion/client';
 declare global {
   interface Window {
     AdobeDC: {
@@ -35,6 +36,8 @@ interface AdobeDCView {
       defaultViewMode: string;
       showAnnotationTools: boolean;
       enableSearchAPIs: boolean;
+      enableFilePreviewEvents: boolean;
+      enableTextSelectionEvent: boolean;
     }
   ): Promise<any>;
   
@@ -62,6 +65,7 @@ const itemVariants = {
   hidden: { opacity: 0, y: 20 },
   show: { opacity: 1, y: 0 }
 };
+
 const PdfQueryPage: React.FC = () => {
   const { pdfs, removePDF, isProcessing, getPDFByServerFilename } = usePDF();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -77,7 +81,13 @@ const PdfQueryPage: React.FC = () => {
   const handleRemovePDF = (id: string | number) => {
     removePDF(id as string);
   };
-
+  // ------------------- handling the similarity click -----------//
+  const handleSimilarityClick = () => {
+    // Assuming you have access to the output object that contains the extracted sections
+    // and subsection analysis from your state or props
+    
+    navigate('/similarity', { state: { result } });
+  };
   const handlePDFClick = (id: string | number) => {
     navigate(`/document/${id}`);
   };
@@ -122,60 +132,57 @@ const PdfQueryPage: React.FC = () => {
     }
   }, [uploadedPdfUrl, originalFilename]);
 
-  const initializeAdobePDFViewer = (serverFilename: string, originalFilename: string) => {
-    console.log(serverFilename);
-    console.log(originalFilename);
-  
+  const initializeAdobePDFViewer = (serverFilename: string, originalName: string) => {
     if (window.AdobeDC) {
       const adobeDCView = new window.AdobeDC.View({
         clientId: "35466cb0881f4c34abe4f6c105cfcf90",
         divId: "pdf-viewer",
       });
-  
+
       adobeDCView
         .previewFile(
           {
             content: {
-              location: {
-                url: `http://localhost:5001/uploads/${serverFilename}`,
-              },
+              location: { url: `http://localhost:5001/uploads/${serverFilename}` },
             },
-            metaData: {
-              fileName: originalFilename,
-            },
+            metaData: { fileName: originalName },
           },
           {
             embedMode: "FULL_WINDOW",
             defaultViewMode: "FIT_PAGE",
             showAnnotationTools: true,
             enableSearchAPIs: true,
+            enableTextSelectionEvent: true,
           }
         )
         .then((viewer: any) => {
           viewerRef.current = viewer;
-  
-          // Track page view changes
+
+          // ✅ Ensure file preview events are enabled
           viewer.registerCallback(
             window.AdobeDC.View.Enum.CallbackType.EVENT_LISTENER,
-            (event: any) => {
+            async (event: any) => {
               if (event.type === "PAGE_VIEW") {
                 setCurrentPage(event.data.pageNumber);
               }
+
+              if (event.type === "PREVIEW_SELECTION_END") {
+                try {
+                  const apis = await viewer.getAPIs();
+                  const selectedContent = await apis.getSelectedContent();
+                  if (selectedContent?.length) {
+                    const text = selectedContent.map((item: any) => item.text).join(" ");
+                    console.log("Selected text:", text);
+                    setSelectedText(text);
+                  }
+                } catch (error) {
+                  console.error("Error getting selected content:", error);
+                }
+              }
             },
-            { enablePageChangeEvents: true }
+            { enablePageViewEvents: true, enableFilePreviewEvents: true } // ✅ key change
           );
-  
-          // Track text selection
-          viewer.getAPIs().then((apis: any) => {
-            apis.addEventListener("TEXT_SELECTION", async () => {
-              console.log("Text selected");
-              const text = await apis.getSelectedText();
-              setSelectedText(text); // store in your state
-              console.log("Selected text:", text);
-            });
-          });
         });
-        
     }
   };
   
@@ -390,7 +397,7 @@ const PdfQueryPage: React.FC = () => {
                 whileHover={{ scale: 1.05, brightness: 1.1 }}
                 whileTap={{ scale: 0.98 }}
                 className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-l-full hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl"
-                onClick={() => console.log('Similarity clicked')}
+                onClick={() => handleSimilarityClick()}
               >
                 Similarity
               </motion.button>
