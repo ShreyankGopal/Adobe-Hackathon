@@ -76,6 +76,7 @@ const PdfQueryPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const viewerRef = useRef<any>(null);
+  const [negativeResult, setNegativeResult] = useState<any>(null);
   const navigate = useNavigate();
   const [originalFilename, setOriginalFilename] = useState<string | null>(null);
   const handleRemovePDF = (id: string | number) => {
@@ -87,6 +88,12 @@ const PdfQueryPage: React.FC = () => {
     // and subsection analysis from your state or props
     
     navigate('/similarity', { state: { result } });
+  };
+  const handleContradictoryClick = () => {
+    // Assuming you have access to the output object that contains the extracted sections
+    // and subsection analysis from your state or props
+    
+    navigate('/contradictory', { state: { negativeResult } });
   };
   const handlePDFClick = (id: string | number) => {
     navigate(`/document/${id}`);
@@ -189,55 +196,61 @@ const PdfQueryPage: React.FC = () => {
   // Initialize Adobe PDF viewer after file upload
   // Removed useEffect - now handled directly in handleFileUpload
 
-  const handleTextSelection = () => {
-    const selection = window.getSelection();
-    if (selection && selection.toString().trim()) {
-      setSelectedText(selection.toString().trim());
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError(null);
-      setResult(null);
-      if (!selectedText.trim()) {
-        setError('Please select text to query');
-        return;
-      }
+    e.preventDefault();
+    setError(null);
+    setResult(null);
+    setNegativeResult(null); // for the second API
+    if (!selectedText.trim()) {
+      setError('Please select text to query');
+      return;
+    }
   
-      const documentsPayload = pdfs.map(p => ({
-        filename: p.serverFilename,
-        outline: p.outline,
-        sections: (p as any).sections ?? undefined
-      }));
+    const documentsPayload = pdfs.map(p => ({
+      filename: p.serverFilename,
+      outline: p.outline,
+      sections: (p as any).sections ?? undefined
+    }));
   
-      const payload = {
-        documents: documentsPayload,
-        selectedText: selectedText
-      };
+    const payload = {
+      documents: documentsPayload,
+      selectedText: selectedText
+    };
   
-      setLoading(true);
-      try {
-        const resp = await fetch('http://localhost:5001/pdf_query', {
+    setLoading(true);
+    try {
+      const [resp1, resp2] = await Promise.all([
+        fetch('http://localhost:5001/pdf_query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        });
+        }),
+        fetch('http://localhost:5001/pdf_query_negative', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+      ]);
   
-        if (!resp.ok) {
-          const body = await resp.json().catch(() => null);
-          throw new Error(body?.error || `Request failed: ${resp.status}`);
-        }
-  
-        const data = await resp.json();
-        setResult(data);
-        
-      } catch (err: any) {
-        setError(err.message || 'Unknown error');
-      } finally {
-        setLoading(false);
+      if (!resp1.ok || !resp2.ok) {
+        const body1 = await resp1.json().catch(() => null);
+        const body2 = await resp2.json().catch(() => null);
+        throw new Error(body1?.error || body2?.error || 'One of the requests failed');
       }
-    };
+  
+      const data1 = await resp1.json();
+      const data2 = await resp2.json();
+  
+      setResult(data1);
+      setNegativeResult(data2);
+  
+    } catch (err: any) {
+      setError(err.message || 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
@@ -369,8 +382,7 @@ const PdfQueryPage: React.FC = () => {
               <div
                 id="pdf-viewer"
                 className="w-full h-full max-h-[90vh] bg-white rounded-2xl shadow-xl"
-                onMouseUp={handleTextSelection}
-                onTouchEnd={handleTextSelection}
+                
               />
             ) : (
               <div className="h-full flex flex-col justify-center items-center text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-white shadow-xl">
@@ -410,7 +422,7 @@ const PdfQueryPage: React.FC = () => {
                 whileHover={{ scale: 1.05, brightness: 1.1 }}
                 whileTap={{ scale: 0.98 }}
                 className="px-6 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white font-semibold rounded-r-full hover:from-red-600 hover:to-rose-700 transition-all shadow-lg hover:shadow-xl"
-                onClick={() => console.log('Contradictory clicked')}
+                onClick={() => handleContradictoryClick()}
               >
                 Contradictory
               </motion.button>

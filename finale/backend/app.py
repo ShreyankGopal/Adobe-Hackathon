@@ -22,7 +22,14 @@ import traceback
 from werkzeug.utils import secure_filename
 from gtts import gTTS
 import os, time, traceback
+from nltk.corpus import wordnet
+from nltk.tokenize import word_tokenize
+import nltk
 
+from RePDFBuildingNegative import highlight_refined_texts_negative
+nltk.download('punkt')
+nltk.download('punkt_tab')
+nltk.download('wordnet')
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,7 +46,29 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 model = None
 embedder = None
+#-------------------------
+# generate contradictory
+#-------------------------
+def generate_contradictory(text):
+    tokens = word_tokenize(text)
+    contradictory_tokens = []
 
+    for token in tokens:
+        antonyms = []
+        for syn in wordnet.synsets(token):
+            for lemma in syn.lemmas():
+                if lemma.antonyms():
+                    antonyms.append(lemma.antonyms()[0].name())
+
+        if antonyms:
+            contradictory_tokens.append(antonyms[0])  # pick first antonym
+        else:
+            contradictory_tokens.append(token)
+
+    return " ".join(contradictory_tokens)
+#-------------------------
+# load model
+#-------------------------
 def load_model():
     global model, embedder
     model_path = "heading_classifier_with_font_count_norm_textNorm_5.pkl"
@@ -555,6 +584,148 @@ def upload_pdf():
         logger.exception(f"Error processing upload: {str(e)}")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
+#---------------------------- #
+# negative pdf query          #
+#---------------------------- #
+
+@app.route('/pdf_query_negative', methods=['POST'])
+def pdf_query_negative():
+    try:
+        data = request.get_json(force=True)
+        if data is None:
+            return jsonify({"error": "Invalid JSON"}), 400
+        selectedText=data.get('selectedText')
+        documents = data.get('documents', [])
+        if not isinstance(documents, list):
+            return jsonify({"error": "documents must be a list"}), 400
+
+        if embedder is None:
+            print("Embedder not loaded on server")
+            return jsonify({"error": "Embedder not loaded on server"}), 500
+        query_text = generate_contradictory(selectedText)
+        query_embedding = embedder.encode(query_text, normalize_embeddings=True)
+
+        section_data = []
+        for doc in documents:
+            #print(doc)
+            filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
+            sections_list = doc.get('sections')
+            if not sections_list:
+                outline_obj = doc.get('outline') or {}
+                sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
+
+            if not sections_list:
+                continue
+
+            for item in sections_list:
+                if isinstance(item, dict) and 'text' in item and 'heading' in item:
+                    heading = item['heading']
+                    full_text = item['text']
+                    page = item.get('page')
+                    rects = item.get('rects', [])
+                    start_line = item.get('start_line')
+                    end_line = item.get('end_line')
+                    start_page = item.get('start_page')
+                    end_page = item.get('end_page')
+                elif isinstance(item, dict) and 'text' in item and 'level' in item:
+                    heading = item['text']
+                    full_text = item['text']
+                    page = item.get('page')
+                    rects = []
+                    start_line = end_line = start_page = end_page = None
+                else:
+                    heading = item.get('heading') if isinstance(item, dict) else str(item)
+                    full_text = item.get('text') if isinstance(item, dict) else heading
+                    page = item.get('page') if isinstance(item, dict) else None
+                    rects = item.get('rects') if isinstance(item, dict) else []
+                    start_line = item.get('start_line') if isinstance(item, dict) else None
+                    end_line = item.get('end_line') if isinstance(item, dict) else None
+                    start_page = item.get('start_page') if isinstance(item, dict) else None
+                    end_page = item.get('end_page') if isinstance(item, dict) else None
+
+                emb = embedder.encode(full_text, normalize_embeddings=True)
+                section_data.append({
+                    'Document': filename,
+                    'Page': page if page is not None else -1,
+                    'heading': heading,
+                    'text': full_text,
+                    'embedding': emb,
+                    'rects': rects,
+                    'start_line': start_line,
+                    'end_line': end_line,
+                    'start_page': start_page,
+                    'end_page': end_page
+                })
+
+        if not section_data:
+            return jsonify({"error": "No headings/sections found in supplied documents"}), 400
+
+        top_k = min(5,len(section_data))
+        selected_indices, sim_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k)
+
+        now = datetime.now().isoformat()
+        output = {
+            "metadata": {
+                "input_documents": [d.get('filename') for d in documents],
+                "selected_text": selectedText,
+                "processing_timestamp": now
+            },
+            "extracted_sections": [],
+            "subsection_analysis": []
+        }
+
+        for rank, idx in enumerate(selected_indices, start=1):
+            sec = section_data[idx]
+            output['extracted_sections'].append({
+                "document": sec['Document'],
+                "section_title": sec['heading'],
+                "importance_rank": rank,
+                "page_number": sec['Page'],
+                "rects": sec.get('rects', []),
+                "start_line": sec.get('start_line'),
+                "end_line": sec.get('end_line'),
+                "start_page": sec.get('start_page'),
+                "end_page": sec.get('end_page')
+            })
+            output['subsection_analysis'].append({
+                "document": sec['Document'],
+                "refined_text": sec['text'],
+                "page_number": sec['Page'],
+                "rects": sec.get('rects', []),
+                "start_line": sec.get('start_line'),
+                "end_line": sec.get('end_line'),
+                "start_page": sec.get('start_page'),
+                "end_page": sec.get('end_page')
+            })
+
+        
+        annotated_map = highlight_refined_texts_negative(output)  # returns { original_filename: annotated_filename, ... }
+
+        # Build the text for LLM podcast summarization, preserving importance order
+        sections_formatted = "\n\n".join(
+            f"Section {i+1} (Rank {sec.get('importance_rank', '?')}): {sec.get('section_title', 'Untitled')}\n{sec['refined_text']}"
+            for i, sec in enumerate(sorted(output['subsection_analysis'], key=lambda x: x.get('importance_rank', 999)))
+            if sec.get('refined_text')
+        )
+
+        # Craft the podcast-style prompt
+        llm_prompt = f"""Below are the most relevant extracted sections from the source documents:
+
+        {sections_formatted}
+
+        """
+
+        # Store in metadata so downstream processes can use it
+        output['metadata']['llm_prompt'] = llm_prompt
+
+        # attach to metadata so frontend can use annotated copies
+        output['metadata']['annotated_files'] = annotated_map
+        print("done pdf negative processing to find contradictions")
+        return jsonify(output)
+
+    except Exception as e:
+        logger.exception("Error in role_query")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 #--------------------------------------- #
 #     pdf_query endpoint                 #
 #--------------------------------------- #
@@ -577,7 +748,7 @@ def pdf_query():
 
         section_data = []
         for doc in documents:
-            print(doc)
+            #print(doc)
             filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
             sections_list = doc.get('sections')
             if not sections_list:
