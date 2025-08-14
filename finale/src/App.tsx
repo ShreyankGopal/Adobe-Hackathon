@@ -7,6 +7,7 @@ import DocumentViewer from './pages/DocumentViewer';
 import QueryPage from './pages/QueryPage';
 import QueryDocumentViewer from './pages/QueryDocumentViewer';
 import DocumentQueryPage from './pages/DocumentQueryPage';
+import SimilarityPage from './pages/SimilarityPage';
 const App: React.FC = () => {
   useEffect(() => {
     const script = document.createElement('script');
@@ -30,6 +31,7 @@ const App: React.FC = () => {
           <Route path="/document/:id" element={<DocumentViewer />} />
           <Route path="/query/:id" element={<QueryDocumentViewer />} />
           <Route path="/QueryDocument" element={<DocumentQueryPage />} />
+          <Route path="/similarity" element={<SimilarityPage />} />
         </Routes>
       </Router>
     </PDFProvider>
