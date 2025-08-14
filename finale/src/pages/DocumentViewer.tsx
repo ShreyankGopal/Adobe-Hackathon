@@ -78,6 +78,7 @@ const DocumentViewer = () => {
   console.log(pdf)
   useEffect(() => {
     if (pdf && pdf.serverFilename && window.AdobeDC) {
+      console.log(pdf.serverFilename)
       const adobeDCView = new window.AdobeDC.View({
         clientId: "35466cb0881f4c34abe4f6c105cfcf90",
         divId: "pdf-viewer",

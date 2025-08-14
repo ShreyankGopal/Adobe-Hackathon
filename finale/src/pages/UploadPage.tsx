@@ -207,6 +207,7 @@ const UploadPage: React.FC = () => {
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <Link to="/" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">Home</Link>
           <Link to="/query" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">Role Based Query</Link>
+          <Link to="/QueryDocument" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">Query Document</Link>
         </div>
       </nav>
 

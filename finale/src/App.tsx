@@ -6,7 +6,7 @@ import UploadPage from './pages/UploadPage';
 import DocumentViewer from './pages/DocumentViewer';
 import QueryPage from './pages/QueryPage';
 import QueryDocumentViewer from './pages/QueryDocumentViewer';
-
+import DocumentQueryPage from './pages/DocumentQueryPage';
 const App: React.FC = () => {
   useEffect(() => {
     const script = document.createElement('script');
@@ -29,6 +29,7 @@ const App: React.FC = () => {
           <Route path="/query" element={<QueryPage />}/>
           <Route path="/document/:id" element={<DocumentViewer />} />
           <Route path="/query/:id" element={<QueryDocumentViewer />} />
+          <Route path="/QueryDocument" element={<DocumentQueryPage />} />
         </Routes>
       </Router>
     </PDFProvider>
