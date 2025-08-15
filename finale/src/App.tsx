@@ -29,11 +29,11 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<UploadPage />} />
           <Route path="/query" element={<QueryPage />}/>
-          <Route path="/document/:id" element={<DocumentViewer />} />
           <Route path="/query/:id" element={<QueryDocumentViewer />} />
           <Route path="/QueryDocument" element={<DocumentQueryPage />} />
           <Route path="/similarity" element={<SimilarityPage />} />
           <Route path="/contradictory" element={<ContradictoryPage />} />
+          <Route path="/document/:id" element={<DocumentViewer />} />
         </Routes>
       </Router>
     </PDFProvider>

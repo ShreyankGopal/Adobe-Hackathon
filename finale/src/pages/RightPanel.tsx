@@ -1,184 +1,350 @@
-import React, { useState, useEffect } from 'react';
-import { X, Lightbulb, Sparkles, Headphones } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import { useLocation } from 'react-router-dom';
-
-interface RightPanelProps {
-  visible: boolean;
-  onClose: () => void;
-  text: string;
-}
+import React from 'react';
+import { motion } from 'framer-motion';
+import { X, Sparkles, Lightbulb, Headphones, Loader2 } from 'lucide-react';
 
 interface PodcastData {
   script: string;
   audio_url: string;
 }
 
-const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text }) => {
-  const location = useLocation();
-  const [loading, setLoading] = useState(false);
-  const [output, setOutput] = useState('');
-  const [podcastData, setPodcastData] = useState('');
-  const [podcastAudioUrl, setPodcastAudioUrl] = useState<string | null>(null);
-  const [podcastLoaded, setPodcastLoaded] = useState(false); // track if it's been loaded before
-  const [activeTab, setActiveTab] = useState<'didYouKnow' | 'summary' | 'podcast' | null>(null);
+interface Insights {
+  summary: string;
+  didYouKnow: string;
+  podcast?: PodcastData;
+}
 
-  const result: QueryResult | undefined = (location.state as any)?.result;
+interface SectionInsights {
+  summary?: string;
+  didYouKnow?: string;
+}
 
-  const handlePodcastMode = async () => {
-    // If already loading or loaded, do nothing
-  
-    if (!result?.metadata?.llm_prompt) return;
-  
-    setLoading(true);
-    setActiveTab('podcast');
+interface LoadingInsights {
+  summary: boolean;
+  didYouKnow: boolean;
+}
 
-    if (loading || podcastLoaded) {
-      setLoading(false);
-      setOutput(podcastData);
-      setTimeout(() => {
-        document.getElementById('podcastPlayer')?.play();
-      }, 300);
-      return;
-    }
-  
-    try {
-      const data: PodcastData = await callAPI('podcast', result.metadata.llm_prompt);
-      setPodcastAudioUrl(data.audio_url);
-      setPodcastData(data.script);
-      setPodcastLoaded(true);
-      setOutput(data.script); // don't show script
-      setTimeout(() => {
-        document.getElementById('podcastPlayer')?.play();
-      }, 300);
-    } finally {
-      setLoading(false);
-    }
-  };
+interface RightPanelProps {
+  visible: boolean;
+  onClose: () => void;
+  insights?: Insights;
+  pageType: 'query' | 'section'; // NEW: controls which layout to show
+  text?: string;
+  sectionInsights?: SectionInsights;
+  loadingInsights?: LoadingInsights;
+  onInsightClick?: (type: 'summary' | 'didYouKnow') => void;
+}
 
-  const callAPI = async (endpoint: string, inputText: string) => {
-    const res = await fetch(`http://localhost:5001/${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: inputText }),
-    });
-    return res.json();
-  };
-
-  const handleClick = async (type: 'didYouKnow' | 'summary') => {
-    setLoading(true);
-    setActiveTab(type);
-    try {
-      const data = await callAPI(
-        type === 'didYouKnow' ? 'did-you-know' : 'summarize',
-        result.metadata.llm_prompt
-      );
-      setOutput(data.response);
-    } finally {
-      setLoading(false);
-    }
-  };
+const RightPanel: React.FC<RightPanelProps> = ({
+  visible,
+  onClose,
+  insights,
+  pageType,
+  text,
+  sectionInsights,
+  loadingInsights,
+  onInsightClick
+}) => {
+  if (!visible) return null;
 
   return (
-    <div
-      className={`fixed top-0 right-0 h-full w-96 bg-white shadow-2xl border-l border-gray-200 transform transition-transform duration-300 z-50 ${
-        visible ? 'translate-x-0' : 'translate-x-full'
-      }`}
+    <motion.div
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+      className="fixed inset-y-0 right-0 w-96 bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col"
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-50 to-blue-50">
-        <h2 className="text-lg font-semibold text-gray-800">AI Assistant</h2>
+        <h2 className="text-lg font-semibold text-gray-800">AI Insights Hub</h2>
         <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full">
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Buttons */}
-      <div className="flex flex-col gap-3 p-4 border-b items-center">
-        <button
-          className={`flex items-center px-4 py-2 rounded-lg font-medium transition w-4/5 justify-center ${
-            activeTab === 'didYouKnow' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-          }`}
-          onClick={() => handleClick('didYouKnow')}
-        >
-          <Lightbulb className="w-5 h-5 mr-2" />
-          Did You Know
-        </button>
-        <button
-          className={`flex items-center px-4 py-2 rounded-lg font-medium transition w-4/5 justify-center ${
-            activeTab === 'summary' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-          }`}
-          onClick={() => handleClick('summary')}
-        >
-          <Sparkles className="w-5 h-5 mr-2" />
-          Summary
-        </button>
-        <button
-          className={`flex items-center px-4 py-2 rounded-lg font-medium transition w-4/5 justify-center ${
-            activeTab === 'podcast' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-          }`}
-          onClick={handlePodcastMode}
-        >
-          <Headphones className="w-5 h-5 mr-2" />
-          Podcast Mode
-        </button>
-      </div>
+      {/* Scrollable Content */}
+      <div className="p-4 overflow-y-auto flex-1 space-y-6">
+        {/* SECTION-SPECIFIC INSIGHTS — shown only for section pages */}
+        {pageType === 'section' && (
+          <div>
+            <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Section Insights</h3>
 
-      {/* Output */}
-      <div className="p-4 overflow-y-auto max-h-[calc(100%-200px)]">
-        {loading && <p className="text-gray-500 italic">Loading...</p>}
-        {!loading && activeTab !== 'podcast' && output && (
-          <div
-          style={{
-            textAlign: 'left',
-            fontSize: '0.95rem',
-            lineHeight: '1.5',
-            color: '#333',
-            whiteSpace: 'pre-wrap',
-            // Remove border, background, padding to avoid box appearance
-          }}
-        >
-          {output}
-        </div>
-        )}
-
-        {/* Podcast Audio Player */}
-        {activeTab === 'podcast' && podcastAudioUrl && (
-          <div style={{ paddingTop: '10px', textAlign: 'center', paddingBottom: '40px' }}>
-            <audio
-              id="podcastPlayer"
-              controls
-              src={podcastAudioUrl}
-              style={{
-                width: '100%',
-                maxWidth: '600px',
-                height: '40px',
-              }}
-            />
-            {/* Show raw script text */}
-            {output && (
-              <div
-                style={{
-                  marginTop: '20px',
-                  textAlign: 'left',
-                  fontSize: '0.95rem',
-                  lineHeight: '1.5',
-                  color: '#333',
-                  whiteSpace: 'pre-wrap',
-                  // Remove border, background, padding to avoid box appearance
-                }}
-              >
-                {output}
+            {/* Summary */}
+            <div className="mb-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+              <div className="flex justify-between items-start">
+                <h4 className="font-semibold text-indigo-800 mb-2 flex items-center">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Summary
+                </h4>
+                <button
+                  onClick={() => onInsightClick?.('summary')}
+                  disabled={!text || loadingInsights?.summary}
+                  className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Generate
+                </button>
               </div>
-            )}
+              {loadingInsights?.summary ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                </div>
+              ) : sectionInsights?.summary ? (
+                <p className="text-sm text-indigo-700 mt-2">{sectionInsights.summary}</p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-2 italic">
+                  No summary generated yet. Click "Generate" to create one.
+                </p>
+              )}
+            </div>
+
+            {/* Did You Know */}
+            <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+              <div className="flex justify-between items-start">
+                <h4 className="font-semibold text-purple-800 mb-2 flex items-center">
+                  <Lightbulb className="w-4 h-4 mr-2" />
+                  Did You Know?
+                </h4>
+                <button
+                  onClick={() => onInsightClick?.('didYouKnow')}
+                  disabled={!text || loadingInsights?.didYouKnow}
+                  className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Generate
+                </button>
+              </div>
+              {loadingInsights?.didYouKnow ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                </div>
+              ) : sectionInsights?.didYouKnow ? (
+                <p className="text-sm text-purple-700 mt-2">{sectionInsights.didYouKnow}</p>
+              ) : (
+                <p className="text-sm text-gray-500 mt-2 italic">
+                  No interesting facts generated yet. Click "Generate" to create one.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
+        {/* AI INSIGHTS HUB (Always Shown) */}
+        {insights && (
+          <>
+            {/* Summary */}
+            <div>
+              <h3 className="font-medium text-purple-800 mb-2 flex items-center">
+                <Sparkles className="w-5 h-5 mr-2" />
+                Summary
+              </h3>
+              <div className="text-sm text-purple-700 whitespace-pre-wrap bg-purple-50 p-3 rounded-lg border border-purple-200">
+                {insights.summary}
+              </div>
+            </div>
 
+            {/* Did You Know */}
+            <div>
+              <h3 className="font-medium text-yellow-800 mb-2 flex items-center">
+                <Lightbulb className="w-5 h-5 mr-2" />
+                Did You Know?
+              </h3>
+              <div className="text-sm text-yellow-700 whitespace-pre-wrap bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                {insights.didYouKnow}
+              </div>
+            </div>
+
+            {/* Podcast */}
+            {insights.podcast && (
+              <div>
+                <h3 className="font-medium text-green-800 mb-2 flex items-center">
+                  <Headphones className="w-5 h-5 mr-2" />
+                  Podcast
+                </h3>
+                <audio controls src={insights.podcast.audio_url} className="w-full mb-2" />
+                <div className="text-sm text-green-700 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200">
+                  {insights.podcast.script}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
-
-    </div>
+    </motion.div>
   );
 };
 
 export default RightPanel;
+// import React from 'react';
+// import { motion } from 'framer-motion';
+// import { X, Sparkles, Lightbulb, Headphones, Loader2 } from 'lucide-react';
+
+// interface PodcastData {
+//   script: string;
+//   audio_url: string;
+// }
+
+// interface Insights {
+//   summary: string;
+//   didYouKnow: string;
+//   podcast?: PodcastData;
+// }
+
+// interface SectionInsights {
+//   summary?: string;
+//   didYouKnow?: string;
+// }
+
+// interface LoadingInsights {
+//   summary?: boolean;
+//   didYouKnow?: boolean;
+// }
+
+// interface RightPanelProps {
+//   visible: boolean;
+//   onClose: () => void;
+//   text?: string;
+//   insights?: Insights;
+//   sectionInsights?: SectionInsights;
+//   loadingInsights?: LoadingInsights;
+//   onInsightClick?: (type: 'summary' | 'didYouKnow') => void;
+//   pageType?: 'query' | 'section' | 'combined' | 'similarity' | 'contradiction';
+// }
+
+// const RightPanel: React.FC<RightPanelProps> = ({
+//   visible,
+//   onClose,
+//   text,
+//   insights,
+//   sectionInsights,
+//   loadingInsights,
+//   onInsightClick,
+//   pageType = 'query'
+// }) => {
+//   if (!visible) return null;
+
+//   return (
+//     <motion.div
+//       initial={{ x: '100%' }}
+//       animate={{ x: 0 }}
+//       exit={{ x: '100%' }}
+//       transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+//       className="fixed inset-y-0 right-0 w-96 bg-white shadow-2xl border-l border-gray-200 z-50 flex flex-col"
+//     >
+//       {/* Header */}
+//       <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-50 to-blue-50">
+//         <h2 className="text-lg font-semibold text-gray-800">AI Insights Hub</h2>
+//         <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full">
+//           <X className="w-5 h-5" />
+//         </button>
+//       </div>
+
+//       {/* Scrollable Content */}
+//       <div className="p-4 overflow-y-auto flex-1 space-y-6">
+//         {/* SECTION-SPECIFIC INSIGHTS — only for section pages */}
+//         {pageType === 'section' && (
+//           <div>
+//             <h3 className="font-bold text-gray-800 mb-4 border-b pb-2">Section Insights</h3>
+
+//             {/* Summary */}
+//             <div className="mb-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+//               <div className="flex justify-between items-start">
+//                 <h4 className="font-semibold text-indigo-800 mb-2 flex items-center">
+//                   <Sparkles className="w-4 h-4 mr-2" />
+//                   Summary
+//                 </h4>
+//                 <button
+//                   onClick={() => onInsightClick?.('summary')}
+//                   disabled={!text || loadingInsights?.summary}
+//                   className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+//                 >
+//                   Generate
+//                 </button>
+//               </div>
+//               {loadingInsights?.summary ? (
+//                 <div className="flex items-center justify-center py-4">
+//                   <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+//                 </div>
+//               ) : sectionInsights?.summary ? (
+//                 <p className="text-sm text-indigo-700 mt-2">{sectionInsights.summary}</p>
+//               ) : (
+//                 <p className="text-sm text-gray-500 mt-2 italic">
+//                   No summary generated yet. Click "Generate" to create one.
+//                 </p>
+//               )}
+//             </div>
+
+//             {/* Did You Know */}
+//             <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+//               <div className="flex justify-between items-start">
+//                 <h4 className="font-semibold text-purple-800 mb-2 flex items-center">
+//                   <Lightbulb className="w-4 h-4 mr-2" />
+//                   Did You Know?
+//                 </h4>
+//                 <button
+//                   onClick={() => onInsightClick?.('didYouKnow')}
+//                   disabled={!text || loadingInsights?.didYouKnow}
+//                   className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+//                 >
+//                   Generate
+//                 </button>
+//               </div>
+//               {loadingInsights?.didYouKnow ? (
+//                 <div className="flex items-center justify-center py-4">
+//                   <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+//                 </div>
+//               ) : sectionInsights?.didYouKnow ? (
+//                 <p className="text-sm text-purple-700 mt-2">{sectionInsights.didYouKnow}</p>
+//               ) : (
+//                 <p className="text-sm text-gray-500 mt-2 italic">
+//                   No interesting facts generated yet. Click "Generate" to create one.
+//                 </p>
+//               )}
+//             </div>
+//           </div>
+//         )}
+
+//         {/* GENERAL AI INSIGHTS HUB — always shown if insights exist */}
+//         {insights && (
+//           <>
+//             {/* Summary */}
+//             <div>
+//               <h3 className="font-medium text-purple-800 mb-2 flex items-center">
+//                 <Sparkles className="w-5 h-5 mr-2" />
+//                 Summary
+//               </h3>
+//               <div className="text-sm text-purple-700 whitespace-pre-wrap bg-purple-50 p-3 rounded-lg border border-purple-200">
+//                 {insights.summary}
+//               </div>
+//             </div>
+
+//             {/* Did You Know */}
+//             <div>
+//               <h3 className="font-medium text-yellow-800 mb-2 flex items-center">
+//                 <Lightbulb className="w-5 h-5 mr-2" />
+//                 Did You Know?
+//               </h3>
+//               <div className="text-sm text-yellow-700 whitespace-pre-wrap bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+//                 {insights.didYouKnow}
+//               </div>
+//             </div>
+
+//             {/* Podcast */}
+//             {insights.podcast && (
+//               <div>
+//                 <h3 className="font-medium text-green-800 mb-2 flex items-center">
+//                   <Headphones className="w-5 h-5 mr-2" />
+//                   Podcast
+//                 </h3>
+//                 <audio controls src={insights.podcast.audio_url} className="w-full mb-2" />
+//                 <div className="text-sm text-green-700 whitespace-pre-wrap bg-green-50 p-3 rounded-lg border border-green-200">
+//                   {insights.podcast.script}
+//                 </div>
+//               </div>
+//             )}
+//           </>
+//         )}
+//       </div>
+//     </motion.div>
+//   );
+// };
+
+// export default RightPanel;

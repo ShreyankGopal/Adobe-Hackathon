@@ -25,6 +25,8 @@ import os, time, traceback
 from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
 import nltk
+import urllib.parse
+from datetime import datetime
 
 from RePDFBuildingNegative import highlight_refined_texts_negative
 nltk.download('punkt')
@@ -424,7 +426,7 @@ def upload_only_file():
     except Exception as e:
         logger.error(f"Error uploading file: {e}")
         return jsonify({"error": "Error uploading file"}), 500
- #--------------------------------------- #
+#--------------------------------------- #
 # upload endpoint: builds sections using df rows' Start/End line indices
 #--------------------------------------- #
 @app.route('/upload', methods=['POST'])
@@ -588,9 +590,287 @@ def upload_pdf():
 # negative pdf query          #
 #---------------------------- #
 
+# @app.route('/pdf_query_negative', methods=['POST'])
+# def pdf_query_negative():
+#     try:
+#         data = request.get_json(force=True)
+#         if data is None:
+#             return jsonify({"error": "Invalid JSON"}), 400
+#         selectedText=data.get('selectedText')
+#         documents = data.get('documents', [])
+#         if not isinstance(documents, list):
+#             return jsonify({"error": "documents must be a list"}), 400
+
+#         if embedder is None:
+#             print("Embedder not loaded on server")
+#             return jsonify({"error": "Embedder not loaded on server"}), 500
+#         query_text = generate_contradictory(selectedText)
+#         query_embedding = embedder.encode(query_text, normalize_embeddings=True)
+
+#         section_data = []
+#         for doc in documents:
+#             #print(doc)
+#             filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
+#             sections_list = doc.get('sections')
+#             if not sections_list:
+#                 outline_obj = doc.get('outline') or {}
+#                 sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
+
+#             if not sections_list:
+#                 continue
+
+#             for item in sections_list:
+#                 if isinstance(item, dict) and 'text' in item and 'heading' in item:
+#                     heading = item['heading']
+#                     full_text = item['text']
+#                     page = item.get('page')
+#                     rects = item.get('rects', [])
+#                     start_line = item.get('start_line')
+#                     end_line = item.get('end_line')
+#                     start_page = item.get('start_page')
+#                     end_page = item.get('end_page')
+#                 elif isinstance(item, dict) and 'text' in item and 'level' in item:
+#                     heading = item['text']
+#                     full_text = item['text']
+#                     page = item.get('page')
+#                     rects = []
+#                     start_line = end_line = start_page = end_page = None
+#                 else:
+#                     heading = item.get('heading') if isinstance(item, dict) else str(item)
+#                     full_text = item.get('text') if isinstance(item, dict) else heading
+#                     page = item.get('page') if isinstance(item, dict) else None
+#                     rects = item.get('rects') if isinstance(item, dict) else []
+#                     start_line = item.get('start_line') if isinstance(item, dict) else None
+#                     end_line = item.get('end_line') if isinstance(item, dict) else None
+#                     start_page = item.get('start_page') if isinstance(item, dict) else None
+#                     end_page = item.get('end_page') if isinstance(item, dict) else None
+
+#                 emb = embedder.encode(full_text, normalize_embeddings=True)
+#                 section_data.append({
+#                     'Document': filename,
+#                     'Page': page if page is not None else -1,
+#                     'heading': heading,
+#                     'text': full_text,
+#                     'embedding': emb,
+#                     'rects': rects,
+#                     'start_line': start_line,
+#                     'end_line': end_line,
+#                     'start_page': start_page,
+#                     'end_page': end_page
+#                 })
+
+#         if not section_data:
+#             return jsonify({"error": "No headings/sections found in supplied documents"}), 400
+
+#         top_k = min(5,len(section_data))
+#         selected_indices, sim_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k)
+
+#         now = datetime.now().isoformat()
+#         output = {
+#             "metadata": {
+#                 "input_documents": [d.get('filename') for d in documents],
+#                 "selected_text": selectedText,
+#                 "processing_timestamp": now
+#             },
+#             "extracted_sections": [],
+#             "subsection_analysis": []
+#         }
+
+#         for rank, idx in enumerate(selected_indices, start=1):
+#             sec = section_data[idx]
+#             output['extracted_sections'].append({
+#                 "document": sec['Document'],
+#                 "section_title": sec['heading'],
+#                 "importance_rank": rank,
+#                 "page_number": sec['Page'],
+#                 "rects": sec.get('rects', []),
+#                 "start_line": sec.get('start_line'),
+#                 "end_line": sec.get('end_line'),
+#                 "start_page": sec.get('start_page'),
+#                 "end_page": sec.get('end_page')
+#             })
+#             output['subsection_analysis'].append({
+#                 "document": sec['Document'],
+#                 "refined_text": sec['text'],
+#                 "page_number": sec['Page'],
+#                 "rects": sec.get('rects', []),
+#                 "start_line": sec.get('start_line'),
+#                 "end_line": sec.get('end_line'),
+#                 "start_page": sec.get('start_page'),
+#                 "end_page": sec.get('end_page')
+#             })
+
+        
+#         annotated_map = highlight_refined_texts_negative(output)  # returns { original_filename: annotated_filename, ... }
+
+#         # Build the text for LLM podcast summarization, preserving importance order
+#         sections_formatted = "\n\n".join(
+#             f"Section {i+1} (Rank {sec.get('importance_rank', '?')}): {sec.get('section_title', 'Untitled')}\n{sec['refined_text']}"
+#             for i, sec in enumerate(sorted(output['subsection_analysis'], key=lambda x: x.get('importance_rank', 999)))
+#             if sec.get('refined_text')
+#         )
+
+#         # Craft the podcast-style prompt
+#         llm_prompt = f"""Below are the most relevant extracted sections from the source documents:
+
+#         {sections_formatted}
+
+#         """
+
+#         # Store in metadata so downstream processes can use it
+#         output['metadata']['llm_prompt'] = llm_prompt
+
+#         # attach to metadata so frontend can use annotated copies
+#         output['metadata']['annotated_files'] = annotated_map
+#         print("done pdf negative processing to find contradictions")
+#         return jsonify(output)
+
+#     except Exception as e:
+#         logger.exception("Error in role_query")
+#         return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
+# @app.route('/pdf_query', methods=['POST'])
+# def pdf_query():
+#     try:
+#         data = request.get_json(force=True)
+#         if data is None:
+#             return jsonify({"error": "Invalid JSON"}), 400
+#         selectedText=data.get('selectedText')
+#         documents = data.get('documents', [])
+#         if not isinstance(documents, list):
+#             return jsonify({"error": "documents must be a list"}), 400
+
+#         if embedder is None:
+#             return jsonify({"error": "Embedder not loaded on server"}), 500
+#         query_text = selectedText
+#         query_embedding = embedder.encode(query_text, normalize_embeddings=True)
+
+#         section_data = []
+#         for doc in documents:
+#             #print(doc)
+#             filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
+#             sections_list = doc.get('sections')
+#             if not sections_list:
+#                 outline_obj = doc.get('outline') or {}
+#                 sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
+
+#             if not sections_list:
+#                 continue
+
+#             for item in sections_list:
+#                 if isinstance(item, dict) and 'text' in item and 'heading' in item:
+#                     heading = item['heading']
+#                     full_text = item['text']
+#                     page = item.get('page')
+#                     rects = item.get('rects', [])
+#                     start_line = item.get('start_line')
+#                     end_line = item.get('end_line')
+#                     start_page = item.get('start_page')
+#                     end_page = item.get('end_page')
+#                 elif isinstance(item, dict) and 'text' in item and 'level' in item:
+#                     heading = item['text']
+#                     full_text = item['text']
+#                     page = item.get('page')
+#                     rects = []
+#                     start_line = end_line = start_page = end_page = None
+#                 else:
+#                     heading = item.get('heading') if isinstance(item, dict) else str(item)
+#                     full_text = item.get('text') if isinstance(item, dict) else heading
+#                     page = item.get('page') if isinstance(item, dict) else None
+#                     rects = item.get('rects') if isinstance(item, dict) else []
+#                     start_line = item.get('start_line') if isinstance(item, dict) else None
+#                     end_line = item.get('end_line') if isinstance(item, dict) else None
+#                     start_page = item.get('start_page') if isinstance(item, dict) else None
+#                     end_page = item.get('end_page') if isinstance(item, dict) else None
+
+#                 emb = embedder.encode(full_text, normalize_embeddings=True)
+#                 section_data.append({
+#                     'Document': filename,
+#                     'Page': page if page is not None else -1,
+#                     'heading': heading,
+#                     'text': full_text,
+#                     'embedding': emb,
+#                     'rects': rects,
+#                     'start_line': start_line,
+#                     'end_line': end_line,
+#                     'start_page': start_page,
+#                     'end_page': end_page
+#                 })
+
+#         if not section_data:
+#             return jsonify({"error": "No headings/sections found in supplied documents"}), 400
+
+#         top_k = min(5,len(section_data))
+#         selected_indices, sim_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k)
+
+#         now = datetime.now().isoformat()
+#         output = {
+#             "metadata": {
+#                 "input_documents": [d.get('filename') for d in documents],
+#                 "selected_text": selectedText,
+#                 "processing_timestamp": now
+#             },
+#             "extracted_sections": [],
+#             "subsection_analysis": []
+#         }
+
+#         for rank, idx in enumerate(selected_indices, start=1):
+#             sec = section_data[idx]
+#             output['extracted_sections'].append({
+#                 "document": sec['Document'],
+#                 "section_title": sec['heading'],
+#                 "importance_rank": rank,
+#                 "page_number": sec['Page'],
+#                 "rects": sec.get('rects', []),
+#                 "start_line": sec.get('start_line'),
+#                 "end_line": sec.get('end_line'),
+#                 "start_page": sec.get('start_page'),
+#                 "end_page": sec.get('end_page')
+#             })
+#             output['subsection_analysis'].append({
+#                 "document": sec['Document'],
+#                 "refined_text": sec['text'],
+#                 "page_number": sec['Page'],
+#                 "rects": sec.get('rects', []),
+#                 "start_line": sec.get('start_line'),
+#                 "end_line": sec.get('end_line'),
+#                 "start_page": sec.get('start_page'),
+#                 "end_page": sec.get('end_page')
+#             })
+
+        
+#         annotated_map = highlight_refined_texts(output)  # returns { original_filename: annotated_filename, ... }
+
+#         # Build the text for LLM podcast summarization, preserving importance order
+#         sections_formatted = "\n\n".join(
+#             f"Section {i+1} (Rank {sec.get('importance_rank', '?')}): {sec.get('section_title', 'Untitled')}\n{sec['refined_text']}"
+#             for i, sec in enumerate(sorted(output['subsection_analysis'], key=lambda x: x.get('importance_rank', 999)))
+#             if sec.get('refined_text')
+#         )
+
+#         # Craft the podcast-style prompt
+#         llm_prompt = f"""Below are the most relevant extracted sections from the source documents:
+
+#         {sections_formatted}
+
+#         """
+
+#         # Store in metadata so downstream processes can use it
+#         output['metadata']['llm_prompt'] = llm_prompt
+
+#         # attach to metadata so frontend can use annotated copies
+#         output['metadata']['annotated_files'] = annotated_map
+#         return jsonify(output)
+
+#     except Exception as e:
+#         logger.exception("Error in role_query")
+#         return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
 @app.route('/pdf_query_negative', methods=['POST'])
 def pdf_query_negative():
     try:
+        import json  # Add this import
+        import urllib.parse  # Add this import
         data = request.get_json(force=True)
         if data is None:
             return jsonify({"error": "Invalid JSON"}), 400
@@ -607,7 +887,6 @@ def pdf_query_negative():
 
         section_data = []
         for doc in documents:
-            #print(doc)
             filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
             sections_list = doc.get('sections')
             if not sections_list:
@@ -720,19 +999,102 @@ def pdf_query_negative():
 
         # attach to metadata so frontend can use annotated copies
         output['metadata']['annotated_files'] = annotated_map
+        # In the pdf_query_negative function...
+
+        # ... (code before insights generation) ...
+
+        # attach to metadata so frontend can use annotated copies
+        output['metadata']['annotated_files'] = annotated_map
+
+        # Generate insights using a single, batched API call
+        try:
+            # Create a single, comprehensive prompt for the LLM
+            combined_text_for_insights = "\n\n".join(
+                [f"Section titled '{sec.get('section_title', 'Untitled')}':\n{sec.get('refined_text', '')}" for sec in output['subsection_analysis']]
+            )
+
+            prompt = f"""
+            Analyze the following content extracted from a document:
+            ---
+            {combined_text_for_insights}
+            ---
+            Based ONLY on the text provided above, generate the following insights.
+            Your response MUST be a valid JSON object with the following keys: "summary", "didYouKnow", "podcastScript".
+
+            1.  "summary": A clear and concise summary of all sections combined.
+            2.  "didYouKnow": A surprising or interesting "Did You Know?" fact based on the content. Do not include the phrase "Did you know".
+            3.  "podcastScript": A short, engaging 2-minute podcast script summarizing the key highlights.
+            """
+
+            # Make a single API call
+            response_text = llm.generate(prompt)
+            
+            # Clean up the response to ensure it's valid JSON
+            cleaned_response = re.sub(r'^```json\s*|\s*```$', '', response_text.strip())
+            insights_json = json.loads(cleaned_response)
+
+            # Generate podcast audio URL from the generated script
+            tts = gTTS(text=insights_json.get("podcastScript", "No script available."), lang="en", slow=False)
+            filename = secure_filename(f"podcast_{int(time.time())}.mp3")
+            file_path = os.path.join(AUDIO_DIR, filename)
+            tts.save(file_path)
+            podcast_audio_url = f"http://localhost:5001/static/audio/{filename}"
+
+            output['insights'] = {
+                "summary": insights_json.get("summary", "Summary could not be generated."),
+                "didYouKnow": insights_json.get("didYouKnow", "Fact could not be generated."),
+                "podcast": {
+                    "script": insights_json.get("podcastScript", "Script could not be generated."),
+                    "audio_url": podcast_audio_url
+                }
+            }
+        except Exception as e:
+            logger.error(f"Insights generation failed: {str(e)}")
+            output['insights'] = {}
+        
         print("done pdf negative processing to find contradictions")
         return jsonify(output)
 
     except Exception as e:
-        logger.exception("Error in role_query")
+        logger.exception("Error in pdf_query_negative")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
-#--------------------------------------- #
-#     pdf_query endpoint                 #
-#--------------------------------------- #
+        # Generate insights for each section and cumulative
+    #     try:
+    #         # Generate insights for each section
+    #         section_insights = {}
+    #         for sec in output['subsection_analysis']:
+    #             key = f"{sec['document']}_{sec['page_number']}_{sec.get('section_title', '')}"
+    #             section_insights[key] = {
+    #                 "summary": llm.generate(f"Summarize this text: {sec['refined_text']}"),
+    #                 "didYouKnow": llm.generate(f"Create a 'Did You Know?' fact about: {sec['refined_text']}")
+    #             }
+            
+    #         # Generate cumulative insights
+    #         cumulative_prompt = f"Combine these insights:\n{json.dumps(section_insights)}"
+    #         output['insights'] = {
+    #             "summary": llm.generate(f"{cumulative_prompt}\nCreate a comprehensive summary"),
+    #             "didYouKnow": llm.generate(f"{cumulative_prompt}\nCreate an interesting 'Did You Know?' fact"),
+    #             "podcast": {
+    #                 "script": llm.generate(f"{cumulative_prompt}\nCreate podcast script"),
+    #                 "audio_url": f"http://localhost:5001/podcast?text={urllib.parse.quote(cumulative_prompt)}"
+    #             }
+    #         }
+    #     except Exception as e:
+    #         logger.error(f"Insights generation failed: {str(e)}")
+    #         output['insights'] = {}
+
+    #     print("done pdf negative processing to find contradictions")
+    #     return jsonify(output)
+
+    # except Exception as e:
+    #     logger.exception("Error in role_query")
+    #     return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 @app.route('/pdf_query', methods=['POST'])
 def pdf_query():
     try:
+        import json  # Add this import
+        import urllib.parse  # Add this import
         data = request.get_json(force=True)
         if data is None:
             return jsonify({"error": "Invalid JSON"}), 400
@@ -748,7 +1110,6 @@ def pdf_query():
 
         section_data = []
         for doc in documents:
-            #print(doc)
             filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
             sections_list = doc.get('sections')
             if not sections_list:
@@ -861,14 +1222,61 @@ def pdf_query():
 
         # attach to metadata so frontend can use annotated copies
         output['metadata']['annotated_files'] = annotated_map
+        # Generate insights using a single, batched API call
+        try:
+            # Create a single, comprehensive prompt for the LLM
+            combined_text_for_insights = "\n\n".join(
+                [f"Section titled '{sec.get('section_title', 'Untitled')}':\n{sec.get('refined_text', '')}" for sec in output['subsection_analysis']]
+            )
+
+            prompt = f"""
+            Analyze the following content extracted from a document:
+            ---
+            {combined_text_for_insights}
+            ---
+            Based ONLY on the text provided above, generate the following insights.
+            Your response MUST be a valid JSON object with the following keys: "summary", "didYouKnow", "podcastScript".
+
+            1.  "summary": A clear and concise summary of all sections combined.
+            2.  "didYouKnow": A surprising or interesting "Did You Know?" fact based on the content. Do not include the phrase "Did you know".
+            3.  "podcastScript": A short, engaging 2-minute podcast script summarizing the key highlights.
+            """
+
+            # Make a single API call
+            response_text = llm.generate(prompt)
+            
+            # Clean up the response to ensure it's valid JSON
+            # The model sometimes wraps the JSON in ```json ... ```
+            cleaned_response = re.sub(r'^```json\s*|\s*```$', '', response_text.strip())
+            insights_json = json.loads(cleaned_response)
+
+            # Generate podcast audio URL from the generated script
+            tts = gTTS(text=insights_json.get("podcastScript", "No script available."), lang="en", slow=False)
+            filename = secure_filename(f"podcast_{int(time.time())}.mp3")
+            file_path = os.path.join(AUDIO_DIR, filename)
+            tts.save(file_path)
+            podcast_audio_url = f"http://localhost:5001/static/audio/{filename}"
+
+            output['insights'] = {
+                "summary": insights_json.get("summary", "Summary could not be generated."),
+                "didYouKnow": insights_json.get("didYouKnow", "Fact could not be generated."),
+                "podcast": {
+                    "script": insights_json.get("podcastScript", "Script could not be generated."),
+                    "audio_url": podcast_audio_url
+                }
+            }
+        except Exception as e:
+            logger.error(f"Insights generation failed: {str(e)}")
+            output['insights'] = {}
+
         return jsonify(output)
 
     except Exception as e:
-        logger.exception("Error in role_query")
+        logger.exception("Error in pdf_query")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
-# -------------------------
-# role_query endpoint (for completeness) - unchanged in behavior except now sections include rects
-# -------------------------
+
+
+       
 @app.route('/role_query', methods=['POST'])
 def role_query():
     try:
@@ -897,7 +1305,7 @@ def role_query():
 
         if embedder is None:
             return jsonify({"error": "Embedder not loaded on server"}), 500
-        numRanks=data.get('numRanks')
+        numRanks = data.get('numRanks')
         query_text = f"{job} {persona}"
         query_embedding = embedder.encode(query_text, normalize_embeddings=True)
 
@@ -994,7 +1402,6 @@ def role_query():
                 "end_page": sec.get('end_page')
             })
 
-        
         annotated_map = highlight_refined_texts(output)  # returns { original_filename: annotated_filename, ... }
 
         # Build the text for LLM podcast summarization, preserving importance order
@@ -1019,12 +1426,50 @@ def role_query():
 
         # attach to metadata so frontend can use annotated copies
         output['metadata']['annotated_files'] = annotated_map
+
+        # Generate cumulative insights
+        try:
+            # Cumulative Summary
+            summary_prompt = f"{llm_prompt} Summarize the mentioned relevant sections clearly and concisely. Format the result text well, leaving lines between paragraphs."
+            summary_response = llm.generate(summary_prompt)
+
+            # Cumulative Did You Know
+            dyk_prompt = f"{llm_prompt} Ignore the task, only give me a 'Did You Know?' fact about the given relevant sections. Do not write 'Did You Know?' in your response. Add an exclamation mark at the end of your fact."
+            dyk_response = llm.generate(dyk_prompt)
+
+            # Cumulative Podcast script
+            podcast_prompt = llm_prompt + """Please create a concise and engaging 2-minute summary of this content, as if you’re having a one-on-one conversation with me. Focus only on the text you want to share—no meta commentary or formatting. 
+
+            Make it fun, insightful, and professional by including surprising facts, clever observations, or notable highlights related to the data. Keep the response simple and plain—no bold or special formatting. 
+
+            Use line breaks to separate paragraphs for easy reading."""
+            podcast_script = llm.generate(podcast_prompt)
+
+            # Generate podcast audio using gTTS (reuse logic from /podcast)
+            tts = gTTS(text=podcast_script, lang="en", slow=False)
+            filename = secure_filename(f"podcast_{int(time.time())}.mp3")
+            file_path = os.path.join(AUDIO_DIR, filename)
+            tts.save(file_path)
+            podcast_audio_url = f"http://localhost:5001/static/audio/{filename}"
+
+            # Add to output
+            output['insights'] = {
+                "summary": summary_response,
+                "didYouKnow": dyk_response,
+                "podcast": {
+                    "script": podcast_script,
+                    "audio_url": podcast_audio_url
+                }
+            }
+        except Exception as e:
+            logger.exception("Error generating cumulative insights: %s", str(e))
+            # Continue with response even if insights fail
+
         return jsonify(output)
 
     except Exception as e:
         logger.exception("Error in role_query")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
-
 @app.route('/uploads/<path:filename>', methods=['GET'])
 def serve_pdf(filename):
     safe_name = secure_filename(filename)
