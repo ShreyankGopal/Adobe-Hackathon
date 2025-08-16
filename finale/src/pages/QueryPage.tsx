@@ -5,6 +5,7 @@ import PdfCard from './PdfCard';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import RightPanel from './RightPanel';
+import { Brain } from "lucide-react";
 
 const containerVariants = {
   hidden: { opacity: 0, y: 8 },
@@ -123,118 +124,150 @@ const RoleQueryPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
-      <nav className="relative z-10 bg-transparent p-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <Link to="/" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">
-            Home
-          </Link>
-          <Link to="/query" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">
-            Role Based Query
-          </Link>
-          <Link to="/QueryDocument" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">
-            Query Document
-          </Link>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-[#030303]">
+
+        <nav className="relative z-10 bg-transparent p-4 text-white mb-4">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                  <Link
+                    to="/"
+                    className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/query"
+                    className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
+                  >
+                    Role Based Query
+                  </Link>
+                  <Link
+                    to="/QueryDocument"
+                    className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
+                  >
+                    Query Document
+                  </Link>
+                </div>
+        </nav>
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-4 h-[calc(100vh-120px)]">
-        <div className="lg:col-span-1 bg-white/90 backdrop-blur-sm rounded-xl shadow-xl border border-white/20 p-4 flex flex-col max-h-full overflow-hidden">
-          <div className="flex-shrink-0">
-            <h2 className="text-lg font-bold text-slate-800 mb-1">Role-Based Query</h2>
-            <p className="text-xs text-slate-600 mb-3">Find relevant sections across your PDFs</p>
+      <div className="lg:col-span-1 bg-[#2A0A2A]/90 backdrop-blur-sm rounded-xl shadow-xl border border-white/10 p-4 flex flex-col max-h-full overflow-hidden">
+  <div className="flex-shrink-0">
+    <h2 className="text-lg font-bold text-white mb-1">Role Based Query</h2>
+    <p className="text-xs text-gray-400 mb-3">Find relevant sections across your PDFs</p>
+  </div>
+
+  <form onSubmit={handleSubmit} className="space-y-3 flex-shrink-0">
+    <div>
+      <label className="block text-xs font-semibold text-gray-300 mb-1">Role</label>
+      <input
+        className="w-full border border-gray-700 rounded-lg px-3 py-2 text-sm bg-[#1a1a1a] text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+        value={role}
+        onChange={(e) => setRole(e.target.value)}
+        placeholder="e.g., Hiring Manager"
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs font-semibold text-gray-300 mb-1">Task</label>
+      <textarea
+        className="w-full border border-gray-700 rounded-lg px-3 py-2 text-sm bg-[#1a1a1a] text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none"
+        value={task}
+        onChange={(e) => setTask(e.target.value)}
+        placeholder="e.g., Identify sections about safety procedures"
+        rows={2}
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs font-semibold text-gray-300 mb-1">
+        Number of Ranks
+      </label>
+      <input
+        type="number"
+        className="w-full border border-gray-700 rounded-lg px-3 py-2 text-sm bg-[#1a1a1a] text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all mb-2"
+        value={ranks}
+        onChange={(e) => setRanks(e.target.value)}
+        placeholder="e.g., 5"
+        min="0"
+      />
+    </div>
+
+<button
+      type="submit"
+      className="w-full py-2.5 text-sm font-semibold rounded-lg bg-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 transition-all shadow-lg hover:shadow-indigo-900/40 disabled:opacity-50 disabled:cursor-not-allowed"
+      disabled={loading}
+    >
+      {loading ? loadingMessage : 'Submit Query'}
+    </button>
+  </form>
+
+  {error && (
+      <div className="text-xs text-red-400 bg-red-900/30 p-2 rounded-lg border border-red-700/50 mt-4">
+        {error}
+      </div>
+    )}
+
+  <div className="mt-4 flex-1 overflow-hidden flex flex-col">
+    <h3 className="text-xs font-semibold text-gray-300 mb-2 flex-shrink-0">
+      Uploaded PDFs ({pdfs.length})
+    </h3>
+
+    <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent mb-6">
+      {pdfs.length > 0 ? (
+        <motion.div variants={containerVariants} initial="hidden" animate="show">
+          <div className="space-y-2">
+            {pdfs.map(pdf => (
+              <motion.div key={pdf.id} variants={itemVariants}>
+                <PdfCard
+                  pdf={pdf}
+                  onRemove={(id) => handleRemovePDF(id)}
+                  onClick={(id) => handlePDFClick(id)}
+                  isProcessing={(name) => isProcessing ? isProcessing(name) : false}
+                />
+              </motion.div>
+            ))}
           </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3 flex-shrink-0">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Role</label>
-              <input
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                placeholder="e.g., Hiring Manager"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Task</label>
-              <textarea
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all resize-none"
-                value={task}
-                onChange={(e) => setTask(e.target.value)}
-                placeholder="e.g., Identify sections about safety procedures"
-                rows={2}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Number of Ranks
-              </label>
-              <input
-                type="number"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                value={ranks}
-                onChange={(e) => setRanks(e.target.value)}
-                placeholder="e.g., 5"
-                min="0"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-2.5 text-sm font-semibold rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
-            >
-              {loading ? loadingMessage : 'Submit Query'}
-            </button>
-
-            {error && (
-              <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg border border-red-200">
-                {error}
-              </div>
-            )}
-          </form>
-
-          <div className="mt-4 flex-1 overflow-hidden flex flex-col">
-            <h3 className="text-sm font-semibold text-slate-700 mb-2 flex-shrink-0">
-              Uploaded PDFs ({pdfs.length})
-            </h3>
-
-            <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
-              {pdfs.length > 0 ? (
-                <motion.div variants={containerVariants} initial="hidden" animate="show">
-                  <div className="space-y-2">
-                    {pdfs.map(pdf => (
-                      <motion.div key={pdf.id} variants={itemVariants}>
-                        <PdfCard
-                          pdf={pdf}
-                          onRemove={(id) => handleRemovePDF(id)}
-                          onClick={(id) => handlePDFClick(id)}
-                          isProcessing={(name) => isProcessing ? isProcessing(name) : false}
-                        />
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-              ) : (
-                <div className="text-xs text-slate-400 text-center py-8 border-2 border-dashed border-slate-200 rounded-lg">
-                  No PDFs uploaded yet
-                </div>
-              )}
-            </div>
-          </div>
+        </motion.div>
+      ) : (
+        <div className="text-xs text-gray-500 text-center py-8 border-2 border-dashed border-gray-700 rounded-lg">
+          No PDFs uploaded yet
         </div>
+      )}
+    </div>
 
-        <div className="lg:col-span-3 bg-white/90 backdrop-blur-sm rounded-xl shadow-xl border border-white/20 p-4 flex flex-col max-h-full overflow-hidden">
+
+
+  </div>
+</div>
+
+
+
+        <div className="lg:col-span-3 bg-[#2A0A2A]/90 text-white backdrop-blur-sm rounded-xl shadow-xl border border-white/20 p-4 flex flex-col max-h-full overflow-hidden">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-xl font-bold text-slate-800">Query Results</h3>
+            <h3 className="text-xl font-bold text-white">Query Results</h3>
            
-              <button
-                onClick={() => setIsInsightsPanelOpen(!isInsightsPanelOpen)}
-                className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all"
-              >
-                AI Insights Hub
-              </button>
+            <button
+            onClick={() => setIsInsightsPanelOpen(!isInsightsPanelOpen)}
+            className="relative px-6 py-3 rounded-xl font-semibold text-white transition-all duration-500
+                      bg-gradient-to-r from-fuchsia-500 via-indigo-600 to-violet-600
+                      bg-[length:300%_300%] animate-gradientMove
+                      shadow-md hover:shadow-lg
+                      overflow-hidden group mb-2 flex items-center gap-2"
+          >
+            {/* Shine effect */}
+            <span
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent 
+                        -translate-x-[200%] group-hover:translate-x-[200%]
+                        transition-transform duration-700 ease-in-out"
+            ></span>
+
+            <span className="relative z-10 flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              AI Insights
+            </span>
+          </button>
+
+
             
           </div>
 
@@ -257,40 +290,61 @@ const RoleQueryPage: React.FC = () => {
 
             {result && (
               <div className="space-y-4 pb-4">
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-3 border border-indigo-100">
+                {/* Processed at box */}
+                <div className="bg-[#1a1a1a] rounded-lg p-3 border border-purple-900/40">
                   <div className="flex items-center justify-between text-sm">
                     <div>
-                      <div className="text-xs text-slate-600">Processed at</div>
-                      <div className="font-semibold text-slate-800">{result.metadata?.processing_timestamp}</div>
+                      <div className="text-xs text-gray-400">Processed on</div>
+                      <div className="font-semibold text-gray-100">
+                      {result.metadata?.processing_timestamp
+                        ? new Date(result.metadata.processing_timestamp).toLocaleString('en-US', {
+                            year: 'numeric',  // "2025"
+                            month: 'long',    // "August"
+                            day: 'numeric',   // "16"
+                            hour: '2-digit',  // "11 PM"
+                            minute: '2-digit',
+                            second: '2-digit'
+                          })
+                        : '—'}
+                    </div>
+
                     </div>
                     <div className="text-right">
-                      <div className="text-xs text-slate-600">Documents</div>
-                      <div className="font-semibold text-slate-800">{result.metadata?.input_documents?.length || 0}</div>
+                      <div className="text-xs text-gray-400">Documents</div>
+                      <div className="font-semibold text-gray-100">
+                        {result.metadata?.input_documents?.length || 0}
+                      </div>
                     </div>
                   </div>
                 </div>
 
+                {/* Extracted sections */}
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-3 flex items-center">
+                  <h4 className="font-bold mb-3 flex items-center text-gray-100">
                     <span className="w-2 h-2 bg-indigo-500 rounded-full mr-2"></span>
                     Top Extracted Sections
                   </h4>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2">
                     {result.extracted_sections?.map((s: any, idx: number) => (
-                      <div 
-                        key={`${s.document}-${s.section_title}-${idx}`} 
-                        className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer" 
+                      <div
+                        key={`${s.document}-${s.section_title}-${idx}`}
+                        className="bg-[#1a1a1a] border border-purple-900/40 rounded-lg p-3 hover:shadow-md hover:shadow-purple-900/20 transition-shadow cursor-pointer"
                         onClick={() => handleExtractedSectionClick(s)}
                       >
-                        <div className="text-xs text-slate-500 font-medium">Document</div>
-                        <div className="font-semibold text-slate-800 text-sm mb-2 truncate" title={s.document}>
+                        <div className="text-xs text-gray-400 font-medium">Document</div>
+                        <div
+                          className="font-semibold text-sm mb-2 truncate text-gray-100"
+                          title={s.document}
+                        >
                           {s.document}
                         </div>
-                        <div className="text-xs text-slate-500 font-medium">Section</div>
-                        <div className="text-sm text-slate-700 mb-2 line-clamp-2">{s.section_title}</div>
-                        <div className="flex justify-between items-center text-xs text-slate-400">
+                        <div className="text-xs text-gray-400 font-medium">Section</div>
+                        <div className="text-sm text-gray-200 mb-2 line-clamp-2">
+                          {s.section_title}
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-gray-500">
                           <span>Page {s.page_number}</span>
-                          <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-medium">
+                          <span className="bg-purple-900/50 px-2 py-1 rounded-full font-medium text-gray-100">
                             Rank #{s.importance_rank}
                           </span>
                         </div>
@@ -298,45 +352,55 @@ const RoleQueryPage: React.FC = () => {
                     ))}
                   </div>
                 </div>
-                {/*Detailed analysis section */}
+
+                {/* Detailed analysis */}
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-3 flex items-center">
+                  <h4 className="font-bold mb-3 flex items-center text-gray-100">
                     <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
                     Detailed Analysis
                   </h4>
                   <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                     {result.subsection_analysis?.map((sa: any, idx: number) => (
-                      <div key={idx} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div
+                        key={idx}
+                        className="bg-[#1a1a1a] border border-purple-900/40 rounded-lg p-4 shadow-sm hover:shadow-md hover:shadow-purple-900/20 transition-shadow"
+                      >
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <div className="text-xs text-slate-500 font-medium">Document</div>
-                            <div className="font-semibold text-slate-800 text-sm">{sa.document}</div>
+                            <div className="text-xs font-medium text-gray-400">Document</div>
+                            <div className="font-semibold text-gray-100 text-sm">
+                              {sa.document}
+                            </div>
                           </div>
-                          <div className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">
+                          <div className="text-xs text-gray-300 bg-purple-900/40 px-2 py-1 rounded">
                             Page {sa.page_number}
                           </div>
                         </div>
-                        <div className="text-xs text-slate-500 font-medium mb-1">Analysis</div>
-                        <div className="text-sm text-slate-700 leading-relaxed">{sa.refined_text}</div>
+                        <div className="text-xs text-gray-400 font-medium mb-1">Analysis</div>
+                        <div className="text-sm text-gray-200 leading-relaxed">
+                          {sa.refined_text}
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-                {/*end of detailed analysis section */}
               </div>
             )}
-          </div>
 
-          <RightPanel
+          </div>
+        </div>
+      </div>
+
+
+      <RightPanel
             visible={isInsightsPanelOpen}
             onClose={() => setIsInsightsPanelOpen(false)}
             text={result?.sections_formatted}
             feature="full"
             
           />
-        </div>
-      </div>
     </div>
+    
   );
 };
 
