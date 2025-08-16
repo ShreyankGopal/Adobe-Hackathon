@@ -15,6 +15,9 @@ dist-ssr
 # Python virtual environment
 /backend/venv/
 /backend/CredPath.json
+/backend/static/audio/
+/backend/uploads/
+/backend/app.log
 
 # Editor directories and files
 .vscode/*
