@@ -1200,22 +1200,27 @@ def podcast():
         if not podcast_input:
             return jsonify({"error": "Missing podcast_input"}), 400
 
-        # 1. Generate podcast script with Gemini
-        podcast_prompt = podcast_input + f"""Please create a concise and engaging 2-minute summary of this content, as if you’re having a one-on-one conversation with me. Focus only on the text you want to share—no meta commentary or formatting. 
+        # 1. Generate podcast script with Gemini (LLM)
+        podcast_prompt = podcast_input + """
+        Please create a concise and engaging 2-minute summary...
+        """
+        script_text = llm.generate(podcast_prompt)
 
-        Make it fun, insightful, and professional by including surprising facts, clever observations, or notable highlights related to the data. Keep the response simple and plain—no bold or special formatting. 
-
-        Use line breaks to separate paragraphs for easy reading."""
-
-        script_text = llm.generate(podcast_prompt)  # your existing Gemini wrapper
-
-        # 2. Convert script to audio with gTTS (fast & free)
-        tts = gTTS(text=script_text, lang="en", slow=False)
+        # 2. Convert to Audio
         filename = secure_filename(f"podcast_{int(time.time())}.mp3")
         file_path = os.path.join(AUDIO_DIR, filename)
-        tts.save(file_path)
 
-        # 3. Return JSON with script & audio URL
+        tts_provider = os.getenv("TTS_PROVIDER", "gcp").lower()
+
+        if tts_provider == "azure":
+            # Use Adobe’s provided script (Azure TTS)
+            generate_audio(script_text, file_path)  
+        else:
+            # Local dev: fallback to Google TTS
+            tts = gTTS(text=script_text, lang="en", slow=False)
+            tts.save(file_path)
+
+        # 3. Return script + audio URL
         return jsonify({
             "script": script_text,
             "audio_url": f"http://localhost:5001/static/audio/{filename}"
