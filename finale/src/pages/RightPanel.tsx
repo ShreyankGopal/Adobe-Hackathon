@@ -88,7 +88,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
     if (type === 'summary') {
       return (
         <div>
-          <h3 className="text-pink-400 font-bold mb-2 flex items-center">
+          <h3 className="text-blue-400 font-bold mb-3 flex items-center">
             <Sparkles className="w-5 h-5 mr-2" />
             Summary
           </h3>
@@ -102,7 +102,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
     if (type === 'didYouKnow') {
       return (
         <div>
-          <h3 className="text-yellow-400 font-bold mb-2 flex items-center">
+          <h3 className="text-blue-400 font-bold mb-3 flex items-center">
             <Lightbulb className="w-5 h-5 mr-2" />
             Did You Know?
           </h3>
@@ -116,11 +116,38 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
     if (type === 'podcast') {
       return (
         <div>
-          <h3 className="text-blue-400 font-bold mb-2 flex items-center">
+          <h3 className="text-blue-400 font-bold mb-4 flex items-center">
             <Headphones className="w-5 h-5 mr-2" />
             Podcast
           </h3>
-          <audio controls src={data.audio_url} className="w-full mb-3" />
+          {/* Use this where you render the player */}
+          <audio
+            controls
+            src={data.audio_url}
+            className="audio-dark w-full mb-3"
+          />
+
+          {/* Drop this style block somewhere once (e.g., in the component or a global CSS file) */}
+          <style jsx>{`
+            /* Hint controls to use dark palette */
+            .audio-dark { color-scheme: dark; }
+
+            /* Chromium/Safari: set control panel background */
+            .audio-dark::-webkit-media-controls-panel {
+              background-color: #1a1a1a;
+            }
+            .audio-dark::-webkit-media-controls-enclosure {
+              background-color: #1a1a1a;
+              border-radius: 0.5rem;
+            }
+
+            /* Optional: tweak time/volume rails contrast a bit */
+            .audio-dark::-webkit-media-controls-timeline,
+            .audio-dark::-webkit-media-controls-volume-slider {
+              filter: contrast(1.1) saturate(0.9);
+            }
+          `}</style>
+
           <div className="text-gray-200 whitespace-pre-wrap bg-gray-800 p-3 rounded-lg max-h-60 overflow-y-auto">
             <ReactMarkdown>{data.script}</ReactMarkdown>
           </div>
@@ -141,48 +168,56 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-900">
-        <h2 className="text-lg font-semibold">AI Insights Hub</h2>
+        <h2 className="text-lg font-semibold text-blue-400">AI Insights Hub</h2>
         <button onClick={onClose} className="p-2 hover:bg-gray-800 rounded-full">
           <X className="w-5 h-5 text-gray-400 hover:text-white" />
         </button>
       </div>
-
+  
       {/* Content */}
       <div className="p-4 overflow-y-auto flex-1 space-y-6">
         {/* Action buttons */}
         <div className="flex flex-col gap-4">
+          {/* Pink - Summary */}
           <button
             onClick={() => handleGenerate('summary')}
-            className="w-full py-3 text-white font-bold rounded-lg bg-pink-600 hover:bg-pink-700 transition-all shadow-lg hover:shadow-pink-500/50"
+            className="w-full py-3 text-white font-bold rounded-lg bg-[#274060] hover:bg-[#1B263B] transition-all shadow-lg"
           >
             <Sparkles className="inline w-5 h-5 mr-2" />
             Generate Summary
           </button>
+  
+          {/* Purple - Did You Know */}
           <button
             onClick={() => handleGenerate('didYouKnow')}
-            className="w-full py-3 text-black font-bold rounded-lg bg-yellow-400 hover:bg-yellow-500 transition-all shadow-lg hover:shadow-yellow-400/50"
+            className="w-full py-3 text-white font-bold rounded-lg bg-[#274060] hover:bg-[#1B263B] transition-all shadow-lg"
           >
             <Lightbulb className="inline w-5 h-5 mr-2" />
             Generate Did You Know
           </button>
+  
+          {/* Blue - Podcast */}
           {feature !== 'insights' && (
             <button
               onClick={() => handleGenerate('podcast')}
-              className="w-full py-3 text-white font-bold rounded-lg bg-blue-600 hover:bg-blue-700 transition-all shadow-lg hover:shadow-blue-500/50"
+              className="w-full py-3 text-white font-bold rounded-lg bg-[#274060] hover:bg-[#1B263B] transition-all shadow-lg"
             >
               <Headphones className="inline w-5 h-5 mr-2" />
-            Generate Podcast
-          </button>
+              Generate Podcast
+            </button>
           )}
         </div>
-
+  
         {/* Results */}
-        {renderContentBlock('summary')}
-        {renderContentBlock('didYouKnow')}
-        {renderContentBlock('podcast')}
+        <div className="space-y-6">
+          <div>{renderContentBlock('summary')}</div>
+          <div>{renderContentBlock('didYouKnow')}</div>
+          <div>{renderContentBlock('podcast')}</div>
+        </div>
       </div>
     </motion.div>
   );
+  
 };
 
 export default RightPanel;

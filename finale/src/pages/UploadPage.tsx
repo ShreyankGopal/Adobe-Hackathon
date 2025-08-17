@@ -1,5 +1,3 @@
-
-// UploadPage.tsx
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, FileText, Plus, X } from 'lucide-react';
@@ -28,7 +26,7 @@ const UploadPage: React.FC = () => {
     Array<{ id: number; x: number; y: number; vx: number; vy: number; life: number; maxLife: number }>
   >([]);
 
-  // --- Particle background (same as your original) ---
+  // --- Particle background (same as original) ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -219,7 +217,12 @@ const UploadPage: React.FC = () => {
   // onDrop starts uploads concurrently, sets processing flags
   const onDrop = useCallback(
     async (acceptedFiles: File[], rejectedFiles: any[]) => {
-      if (acceptedFiles.length === 0) return;
+      console.log('onDrop triggered', { acceptedFiles, rejectedFiles }); // Debug log
+      if (acceptedFiles.length === 0 && rejectedFiles.length === 0) {
+        pushToast('No valid files dropped', 'error');
+        return;
+      }
+
       const promises: Promise<void>[] = [];
 
       for (const file of acceptedFiles) {
@@ -237,11 +240,22 @@ const UploadPage: React.FC = () => {
         promises.push(p);
       }
 
-      await Promise.allSettled(promises);
-
       if (rejectedFiles?.length) {
-        pushToast(`${rejectedFiles.length} file(s) were rejected`, 'error');
+        rejectedFiles.forEach((rejection) => {
+          const fileName = rejection.file.name;
+          rejection.errors.forEach((err: { code: string; message: string }) => {
+            if (err.code === 'file-too-large') {
+              pushToast(`${fileName}: File too large (max 50MB)`, 'error');
+            } else if (err.code === 'file-invalid-type') {
+              pushToast(`${fileName}: Only PDF files are accepted`, 'error');
+            } else {
+              pushToast(`${fileName}: ${err.message}`, 'error');
+            }
+          });
+        });
       }
+
+      await Promise.allSettled(promises);
     },
     [addPDF, setProcessing]
   );
@@ -263,6 +277,10 @@ const UploadPage: React.FC = () => {
     accept: { 'application/pdf': ['.pdf'] },
     multiple: true,
     maxSize: 50 * 1024 * 1024,
+    onDragEnter: () => console.log('Drag entered'), // Debug log
+    onDragOver: () => console.log('Drag over'), // Debug log
+    onDragLeave: () => console.log('Drag left'), // Debug log
+    preventDefault: true, // Ensure default browser behavior is prevented
   });
 
   const handlePDFClick = (id: string) => navigate(`/document/${id}`);
@@ -293,13 +311,22 @@ const UploadPage: React.FC = () => {
       {/* Navbar (restored) */}
       <nav className="relative z-10 bg-transparent p-4">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <Link to="/" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">
+          <Link
+            to="/"
+            className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
+          >
             Home
           </Link>
-          <Link to="/query" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">
+          <Link
+            to="/query"
+            className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
+          >
             Role Based Query
           </Link>
-          <Link to="/QueryDocument" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">
+          <Link
+            to="/QueryDocument"
+            className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
+          >
             Query Document
           </Link>
         </div>
@@ -308,73 +335,100 @@ const UploadPage: React.FC = () => {
       {/* Main Content */}
       <motion.div initial="hidden" animate="visible" variants={containerVariants} className="relative z-10 p-4 sm:p-6 lg:p-8">
         {/* Hero (kept nice gradient) */}
-        <motion.div variants={itemVariants} className="text-center mt-10 mb-12">
+        <motion.div variants={itemVariants} className="text-center mt-4 mb-12">
           <h1 className="text-5xl sm:text-6xl font-extrabold">
             <span
-              className="bg-gradient-to-r from-[#ff6ec4] via-[#7873f5] via-[#4DA3FF] to-[#4ade80] bg-clip-text text-transparent animate-pulse"
+              className="bg-gradient-to-r from-[#ff6ec4] via-[#7873f5] via-[#4DA3FF] to-[#4ade80] bg-clip-text text-transparent"
               style={{
                 backgroundSize: '300% 100%',
-                animation: 'gradientFlow 4s ease-in-out infinite',
+                animation: 'gradientFlow 6s ease-in-out infinite',
               }}
             >
               PDF Analysis Tool
             </span>
+            <style jsx>{`
+              @keyframes gradientFlow {
+                0% {
+                  background-position: 0% 50%;
+                }
+                50% {
+                  background-position: 100% 50%;
+                }
+                100% {
+                  background-position: 0% 50%;
+                }
+              }
+            `}</style>
           </h1>
           <p className="text-lg sm:text-xl text-gray-300 mt-4 max-w-2xl mx-auto">
             Upload your PDFs for AI-powered analysis
           </p>
         </motion.div>
 
-        {/* Dropzone with tracer border (kept original visuals) */}
+        {/* Dropzone with premium futuristic glow */}
         <motion.div variants={itemVariants}>
-          <div className="relative max-w-3xl mx-auto">
-            <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              <div
-                className="absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    'conic-gradient(from 0deg, transparent 250deg, #00f7ff 280deg, #0fffc1 310deg, #00f7ff 340deg, transparent 360deg)',
-                  animation: 'spin 14s linear infinite',
-                  filter: 'drop-shadow(0 0 8px #00f7ff) drop-shadow(0 0 16px #0fffc1)',
-                }}
-              />
-              <div className="absolute inset-[4px] rounded-2xl bg-[#030303]" />
-            </div>
+          {/* Dropzone container (top-level so it can catch drop events) */}
+          <div
+            {...getRootProps({ role: 'region', 'aria-label': 'PDF upload dropzone' })}
+            className={`${getDropzoneClassName(
+              isDragActive,
+              isDragAccept,
+              isDragReject
+            )} relative max-w-lg mx-auto border-2 border-dashed rounded-xl transition-colors duration-300`}
+          >
+            <input {...getInputProps()} />
 
-            <div {...getRootProps()} className={`${getDropzoneClassName(isDragActive, isDragAccept, isDragReject)} relative z-10`}>
-              <input {...getInputProps()} />
-              <div className="text-center p-8">
-                {isDragActive ? (
-                  isDragAccept ? (
-                    <div className="space-y-4">
-                      <Upload className="w-12 h-12 text-[#4DA3FF] mx-auto animate-bounce" />
-                      <p className="text-lg font-medium">Drop your PDFs here!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <X className="w-12 h-12 text-red-400 mx-auto animate-pulse" />
-                      <p className="text-lg font-medium text-red-400">Only PDF files are accepted</p>
-                    </div>
-                  )
+            {/* Inner background (does not block events) */}
+            <div className="absolute inset-[3px] rounded-xl bg-[#0a0a0a] overflow-hidden pointer-events-none" />
+
+            {/* Content */}
+            <div className="text-center p-6 space-y-5 relative z-10">
+              {isDragActive ? (
+                isDragAccept ? (
+                  <div className="space-y-4">
+                    <Upload className="w-12 h-12 text-[#00f7ff] mx-auto animate-float" />
+                    <p className="text-lg font-semibold text-white">
+                      Drop your PDFs here!
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-4">
-                    <Upload className="w-12 h-12 text-[#4DA3FF] mx-auto transition-transform duration-200 hover:scale-110" />
-                    <p className="text-lg font-medium">Drag & drop PDFs here or click to upload</p>
-                    <p className="text-sm text-gray-400">Supports multiple PDFs (up to 50MB each)</p>
-                    <button className="mt-4 inline-flex items-center px-6 py-3 rounded-full bg-[#4DA3FF] text-[#030303] font-semibold shadow-lg hover:bg-[#89CFF0] hover:scale-105 transform transition-all duration-300 ease-out">
-                      <Plus className="w-5 h-5 mr-2" />
-                      Upload Files
-                    </button>
+                    <X className="w-12 h-12 text-red-400 mx-auto animate-pulse" />
+                    <p className="text-base font-medium text-red-400">
+                      Only PDF files are accepted
+                    </p>
                   </div>
-                )}
-              </div>
+                )
+              ) : (
+                <div className="space-y-4">
+                  <Upload className="w-12 h-12 text-[#00f7ff] mx-auto animate-float" />
+                  <p className="text-lg font-semibold text-white">
+                    Drag & drop PDFs here or click to upload
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Supports multiple PDFs (up to 50MB each)
+                  </p>
+                  <motion.button
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.96 }}
+                    className="mt-3 inline-flex items-center px-5 py-2.5 rounded-full bg-gradient-to-r from-[#00f7ff] via-[#0fffc1] to-[#00f7ff] text-[#030303] font-bold shadow-lg transition-all duration-500 ease-out"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Upload Files
+                  </motion.button>
+                </div>
+              )}
             </div>
           </div>
 
-          <style>{`
-            @keyframes spin {
-              from { transform: rotate(0deg); }
-              to { transform: rotate(360deg); }
+          <style jsx>{`
+            @keyframes float {
+              0% { transform: translateY(0px); }
+              50% { transform: translateY(-6px); }
+              100% { transform: translateY(0px); }
+            }
+            .animate-float {
+              animation: float 3s ease-in-out infinite;
             }
           `}</style>
         </motion.div>
@@ -392,8 +446,8 @@ const UploadPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="max-w-[1200px] mx-auto">
-              <div className="grid gap-6 justify-center grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
+            <div>
+              <div className="grid gap-6 grid-cols-[repeat(auto-fill,minmax(270px,270px))] justify-start">
                 {pdfs.map((pdf, index) => (
                   <motion.div
                     key={pdf.id}
@@ -428,24 +482,6 @@ const UploadPage: React.FC = () => {
           </motion.div>
         )}
       </motion.div>
-
-      {/* CSS-in-JS for custom animations */}
-      <style jsx>{`
-        @keyframes gradientFlow {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-
-        .gradient-text {
-          background: linear-gradient(-45deg, #ff6ec4, #7873f5, #4DA3FF, #4ade80, #ff6ec4);
-          background-size: 300% 300%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
-          animation: gradientFlow 4s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };
