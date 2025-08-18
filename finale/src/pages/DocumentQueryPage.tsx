@@ -4,7 +4,6 @@ import { usePDF } from '../context/PDFContext';
 import PdfCard from './PdfCard';
 import { useNavigate, Link } from 'react-router-dom';
 import RightPanel from './RightPanel';
-import { Brain } from "lucide-react";
 
 declare global {
   interface Window {
@@ -409,53 +408,49 @@ const PdfQueryPage: React.FC = () => {
               )}
             </button>
           ) : (
-            <div className="bg-[#2A0A2A]/90 border border-purple-800/40 p-3 rounded-lg space-y-3 
-                flex flex-col items-center justify-center text-center">
+            <div className="bg-[#2A0A2A]/90 border border-purple-800/40 p-4 rounded-xl space-y-4 flex flex-col items-center justify-center text-center shadow-lg">
+  <p className="text-sm font-semibold text-purple-200 tracking-wide">Query Complete!</p>
 
-              <p className="text-sm font-semibold text-white">
-                Query Complete!
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 w-full">
-  <motion.button
-    whileHover={{ scale: 1.05 }}
-    className="flex-1 py-3 sm:py-2 text-sm font-semibold rounded-xl 
-               bg-emerald-800 text-white shadow-md"
-    onClick={handleSimilarityClick}
+  <div className="flex flex-col sm:flex-row gap-4 w-full">
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      className="flex-1 py-3 sm:py-2 text-sm font-semibold rounded-xl 
+                 bg-gradient-to-r from-purple-700 to-purple-900 
+                 text-white shadow-md hover:shadow-lg transition-all duration-300"
+      onClick={handleSimilarityClick}
+    >
+      Similarities
+    </motion.button>
+
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      className="flex-1 py-3 sm:py-2 text-sm font-semibold rounded-xl 
+                 bg-gradient-to-r from-pink-700 to-rose-900 
+                 text-white shadow-md hover:shadow-lg transition-all duration-300"
+      onClick={handleContradictoryClick}
+    >
+      Contradictions
+    </motion.button>
+  </div>
+
+  <button
+    onClick={() => setIsInsightsPanelOpen(!isInsightsPanelOpen)}
+    className="relative px-4 py-2 rounded-xl font-semibold text-sm text-white 
+               transition-all duration-500 
+               bg-gradient-to-r from-fuchsia-500 via-purple-600 to-violet-700 
+               bg-[length:300%_300%] animate-gradientMove 
+               shadow-md hover:shadow-lg overflow-hidden group"
   >
-    Similarities
-  </motion.button>
-  <motion.button
-    whileHover={{ scale: 1.05 }}
-    className="flex-1 py-3 sm:py-2 text-sm font-semibold rounded-xl 
-               bg-rose-800 text-white shadow-md"
-    onClick={handleContradictoryClick}
-  >
-    Contradictions
-  </motion.button>
+    {/* Shine effect */}
+    <span
+      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent 
+                 -translate-x-[200%] group-hover:translate-x-[200%] 
+                 transition-transform duration-700 ease-in-out"
+    ></span>
+    <span className="relative z-10">AI Insights</span>
+  </button>
 </div>
 
-<button
-  onClick={() => setIsInsightsPanelOpen(!isInsightsPanelOpen)}
-  className="relative px-3 py-2 rounded-xl font-semibold text-white transition-all duration-500
-             bg-gradient-to-r from-fuchsia-500 via-indigo-600 to-violet-600
-             bg-[length:300%_300%] animate-gradientMove
-             shadow-md hover:shadow-lg
-             overflow-hidden group mb-2 flex items-center gap-2 text-sm"
->
-  {/* Shine effect */}
-  <span
-    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent 
-               -translate-x-[200%] group-hover:translate-x-[200%]
-               transition-transform duration-700 ease-in-out"
-  ></span>
-
-  <span className="relative z-10 flex items-center gap-1">
-    <Brain className="w-4 h-4" />
-    AI Insights
-  </span>
-</button>
-
-            </div>
           )}
         </div>
 

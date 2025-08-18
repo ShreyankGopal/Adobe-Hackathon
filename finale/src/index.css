@@ -34,7 +34,7 @@
   }
   
   .card-hover {
-    @apply hover:scale-[1.02] hover:-translate-y-1;
+    @apply hover:scale-[1.0] hover:-translate-y-1;
   }
 }
 

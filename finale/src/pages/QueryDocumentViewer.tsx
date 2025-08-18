@@ -341,203 +341,218 @@ const QueryDocumentViewer: React.FC = () => {
 
   if (!result) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-            <Search className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">No query results found</h2>
-            <p className="text-gray-600 mb-6">Please run a query first to view results.</p>
-            <button onClick={() => navigate('/query')} className="btn-primary">
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back to Query
-            </button>
-            </motion.div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a]">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <Search className="w-16 h-16 text-purple-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-semibold text-purple-100 mb-2">
+            No query results found
+          </h2>
+          <p className="text-purple-300 mb-6">
+            Please run a query first to view results.
+          </p>
+          <button onClick={() => navigate('/query')} className="btn-primary">
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to Query
+          </button>
+        </motion.div>
+      </div>
     );
   }
-
+  
   if (!currentPDF) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-            <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-gray-800 mb-2">PDF not found</h2>
-            <p className="text-gray-600 mb-6">The requested document could not be found.</p>
-            <button onClick={() => navigate('/query')} className="btn-primary">
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back to Query
-            </button>
-            </motion.div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-[#1a1a1a]">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center"
+        >
+          <FileText className="w-16 h-16 text-purple-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-semibold text-purple-100 mb-2">
+            PDF not found
+          </h2>
+          <p className="text-purple-300 mb-6">
+            The requested document could not be found.
+          </p>
+          <button
+  onClick={() => navigate('/query')}
+  className="flex items-center justify-center mx-auto px-4 py-2 rounded-lg 
+             bg-purple-700 hover:bg-purple-800 text-white font-medium 
+             transition-all duration-200 shadow-md"
+>
+  <ArrowLeft className="w-5 h-5 mr-2" />
+  Back to Query
+</button>
+
+
+        </motion.div>
+      </div>
     );
   }
-
+  
   const sectionsByDocument = getSectionsByDocument();
-
+  
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="min-h-screen bg-gray-50 flex">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="min-h-screen bg-[#1a1a1a] flex"
+    >
       <AnimatePresence>
         {sidebarOpen && (
-        <motion.div
-          initial={{ x: -400, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: -400, opacity: 0 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="w-80 lg:w-96 bg-slate-900 shadow-2xl border-r border-slate-700 flex flex-col relative z-20"
-        >
-          {/* Header */}
-          <div className="p-6 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-2">
-                <Search className="w-6 h-6 text-indigo-400" />
-                <h2 className="text-lg font-semibold text-slate-100">
-                  {queryType === 'similarity'
-                    ? 'Similarity'
-                    : queryType === 'contradiction'
-                    ? 'Contradiction'
-                    : 'Query'} Results
-                </h2>
+          <motion.div
+            initial={{ x: -400, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -400, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="w-80 lg:w-96 bg-[#2A0A2A]/95 shadow-2xl border-r border-purple-900/40 flex flex-col relative z-20"
+          >
+            {/* Header */}
+            <div className="p-6 border-b border-purple-900/40 bg-gradient-to-r from-[#2A0A2A] to-[#1a1a1a]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Search className="w-6 h-6 text-purple-400" />
+                  <h2 className="text-lg font-semibold text-purple-100">
+                    {queryType === 'similarity'
+                      ? 'Similarity'
+                      : queryType === 'contradiction'
+                      ? 'Contradiction'
+                      : 'Query'}{' '}
+                    Results
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="lg:hidden p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-purple-400 hover:text-purple-200" />
+                </button>
               </div>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="lg:hidden p-2 hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-400 hover:text-slate-200" />
-              </button>
+  
+              {selectedText && (
+                <div className="text-sm text-purple-300 mb-3">
+                  <p className="font-medium text-purple-200">Selected Text:</p>
+                  <div className="text-xs bg-[#1a1a1a] p-2 rounded mt-1 max-h-20 overflow-y-auto border border-purple-900/40">
+                    {selectedText}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-purple-400 mt-2">
+                {result.extracted_sections.length} sections found
+              </p>
             </div>
-        
-            {selectedText && (
-              <div className="text-sm text-slate-300 mb-3">
-                <p className="font-medium text-slate-200">Selected Text:</p>
-                <div className="text-xs bg-slate-800 p-2 rounded mt-1 max-h-20 overflow-y-auto border border-slate-700">
-                  {selectedText}
-                </div>
-              </div>
-            )}
-            <p className="text-xs text-indigo-400 mt-2">
-              {result.extracted_sections.length} sections found
-            </p>
-          </div>
-        
-          {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {Object.entries(sectionsByDocument).map(([document, sections]) => (
-              <div key={document} className="space-y-2">
-                <div className="sticky top-0 bg-slate-900 z-10 p-2 border-b border-slate-700">
-                  <h3 className="font-semibold text-slate-100 text-sm flex items-center">
-                    <FileText className="w-4 h-4 mr-2 text-indigo-400" />
-                    {getCleanDocumentName(document)}
-                    {selectedDocument === document && (
-                      <span className="ml-2 bg-green-900/40 text-green-300 text-xs px-2 py-1 rounded-full">
-                        Current
-                      </span>
-                    )}
-                  </h3>
-                </div>
-                {sections.map((section, idx) => {
-                  const sectionKey = `${section.document}_${section.page_number}_${section.section_title}`.replace(
-                    /\s+/g,
-                    '_'
-                  );
-                  const isSelected =
-                    selectedSectionKey === sectionKey ||
-                    (initialSectionKey === sectionKey && !selectedSectionKey);
-        
-                  return (
-                    <motion.div
-                      key={sectionKey}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
-                        isSelected
-                          ? 'bg-indigo-900/50 border-indigo-500 shadow-md'
-                          : 'bg-slate-800 border-slate-700 hover:bg-slate-700'
-                      }`}
-                      onClick={() => handleSectionClick(section)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <h4
-                            className="font-medium text-slate-100 text-sm truncate"
-                            title={section.section_title}
-                          >
-                            {section.section_title}
-                          </h4>
-                          <div className="flex items-center space-x-3 mt-2 text-xs">
-                            <span className="flex items-center text-indigo-400">
-                              <BookOpen className="w-3 h-3 mr-1" />
-                              Page {section.page_number}
-                            </span>
-                            <span className="flex items-center text-orange-400">
-                              <Hash className="w-3 h-3 mr-1" />
-                              Rank {section.importance_rank}
-                            </span>
+  
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {Object.entries(sectionsByDocument).map(([document, sections]) => (
+                <div key={document} className="space-y-2">
+                  <div className="sticky top-0 bg-[#2A0A2A]/95 z-10 p-2 border-b border-purple-900/40">
+                    <h3 className="font-semibold text-purple-100 text-sm flex items-center">
+                      <FileText className="w-4 h-4 mr-2 text-purple-400" />
+                      {getCleanDocumentName(document)}
+                      {selectedDocument === document && (
+                        <span className="ml-2 bg-green-900/40 text-green-300 text-xs px-2 py-1 rounded-full">
+                          Current
+                        </span>
+                      )}
+                    </h3>
+                  </div>
+                  {sections.map((section, idx) => {
+                    const sectionKey = `${section.document}_${section.page_number}_${section.section_title}`.replace(
+                      /\s+/g,
+                      '_'
+                    );
+                    const isSelected =
+                      selectedSectionKey === sectionKey ||
+                      (initialSectionKey === sectionKey && !selectedSectionKey);
+  
+                    return (
+                      <motion.div
+                        key={sectionKey}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border ${
+                          isSelected
+                            ? 'bg-purple-900/50 border-purple-500 shadow-md'
+                            : 'bg-[#1a1a1a] border-purple-900/40 hover:bg-[#2A0A2A]'
+                        }`}
+                        onClick={() => handleSectionClick(section)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4
+                              className="font-medium text-purple-100 text-sm truncate"
+                              title={section.section_title}
+                            >
+                              {section.section_title}
+                            </h4>
+                            <div className="flex items-center space-x-3 mt-2 text-xs">
+                              <span className="flex items-center text-purple-400">
+                                <BookOpen className="w-3 h-3 mr-1" />
+                                Page {section.page_number}
+                              </span>
+                              <span className="flex items-center text-orange-400">
+                                <Hash className="w-3 h-3 mr-1" />
+                                Rank {section.importance_rank}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </motion.div>
-        
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
-
+  
       <div className="flex-1 flex flex-col">
-        <div className="bg-white shadow-sm border-b border-gray-200 p-4 relative z-10">
+        <div className="bg-[#2A0A2A]/90 shadow-sm border-b border-purple-900/40 p-4 relative z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <button onClick={() => navigate(-1)} className="btn-secondary">
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </button>
-              
+               <button
+                              onClick={() => navigate(-1)}
+                              className="btn-secondary text-white bg-purple-800/40 hover:bg-purple-700/50"
+                            >
+                              <ArrowLeft className="w-5 h-5 mr-2" />
+                              Back
+                            </button>
             </div>
             <div className="flex items-center space-x-4">
-            {/* <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`flex items-center px-4 py-2 rounded-lg shadow-md transition-all ${
-                sidebarOpen
-                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:shadow-lg'
-                  : 'btn-secondary lg:hidden'
-              }`}
-            >
-              {sidebarOpen ? (
-                <>
-                  <X className="w-5 h-5 mr-2" />
-                  Hide Sidebar
-                </>
-              ) : (
-                <>
-                  <Menu className="w-5 h-5 mr-2" />
-                  Show Sidebar
-                </>
-              )}
-            </button> */}
-              
               <button
                 onClick={() => setIsPanelOpen(true)}
-                className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all"
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all"
               >
                 AI Insights Hub
               </button>
             </div>
           </div>
         </div>
-
-        <div className="flex-1 bg-gradient-to-br from-gray-100 to-gray-200 p-4">
+  
+        <div className="flex-1 bg-[#1a1a1a] p-4">
           <div className="w-full h-full">
-            <div id="pdf-viewer" className="w-full h-full bg-white rounded-lg shadow-xl" />
+            <div
+              id="pdf-viewer"
+              className="w-full h-full bg-[#1a1a1a] rounded-lg shadow-xl border border-purple-900/40"
+            />
           </div>
         </div>
       </div>
-
-      {sidebarOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-
-      {/* === CORRECTED: Simplified and correct props === */}
+  
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+  
       <RightPanel
         visible={isPanelOpen}
         onClose={() => setIsPanelOpen(false)}
@@ -546,6 +561,7 @@ const QueryDocumentViewer: React.FC = () => {
       />
     </motion.div>
   );
+  
 };
 
 export default QueryDocumentViewer;
