@@ -25,6 +25,9 @@ import os, time, traceback
 from nltk.corpus import wordnet
 from nltk.tokenize import word_tokenize
 import nltk
+import azure.cognitiveservices.speech as speechsdk
+import random
+import xml.sax.saxutils as saxutils
 import urllib.parse
 from datetime import datetime
 
@@ -788,10 +791,43 @@ def generate_didyouknow():
 # PDF podcast Route         #
 #---------------------------#
 
+
+
 @app.route('/generate_podcast', methods=['POST'])
 def generate_podcast():
     try:
-        import json
+
+        # Directory to save audio files
+        AUDIO_DIR = os.path.join(os.getcwd(), "static/audio")
+        os.makedirs(AUDIO_DIR, exist_ok=True)
+
+        # Azure Speech credentials
+        AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
+        AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION")
+
+        # Voices (expand as needed)
+        MALE_VOICES = [
+            "en-IN-ArjunIndicNeural",
+            "en-IN-PrabhatIndicNeural",
+            "en-IN-AaravNeural",
+            "en-IN-ArjunNeural",
+            "en-IN-KunalNeural",
+            "en-IN-PrabhatNeural",
+            "en-IN-RehaanNeural",
+            "en-IN-Arjun:DragonHDV1.1.2Neural"
+        ]
+
+        FEMALE_VOICES = [
+            "en-IN-AartiIndicNeural",
+            "en-IN-NeerjaIndicNeural",
+            "en-IN-AashiNeural",
+            "en-IN-AartiNeural",
+            "en-IN-AnanyaNeural",
+            "en-IN-KavyaNeural",
+            "en-IN-NeerjaNeural",
+            "en-IN-Aarti:DragonHDV1.1.1Neural"
+        ]
+
         data = request.get_json(force=True)
         if not data:
             return jsonify({"error": "Invalid JSON"}), 400
@@ -801,8 +837,14 @@ def generate_podcast():
             return jsonify({"error": "Missing 'text' field"}), 400
 
         custom_prompt = data.get("prompt") or """
-        Write a short, engaging 2-minute podcast script based on the text below.
-        Respond only with the script, no extra commentary.
+        Write a short, engaging 2-minute podcast script for the show between a Host and a Guest.
+        Strictly use the format:
+        Host: ...
+        Guest: ...
+        Make the conversation fun, natural, and informative, focusing on the text below. Ensure that you:
+        1. Respond only with the script between the two. 
+        2. Make sure the script doesn't have formatting like bold and italics. 
+        3. You can give the host and guest an Indian male and female name respectively, as well as an interesting podcast name.
         """
 
         prompt = f"""
@@ -812,172 +854,88 @@ def generate_podcast():
         {text_content}
         ---
         """
+        # speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
+        # synth = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
+        # voices = synth.get_voices_async().get()
 
+        # if voices.reason == speechsdk.ResultReason.VoicesListRetrieved:
+        #     logger.info("Available voices:")
+        #     for v in voices.voices:
+        #         logger.info(v.short_name)
+        # else:
+        #     logger.warning("Could not retrieve voices, reason: %s", voices.reason)
+
+        logger.info("Generated Prompt:\n%s", prompt)
+
+        # Generate script using your LLM
         podcast_script = llm.generate(prompt).strip()
+        logger.info("Generated Script:\n%s", podcast_script)
 
-        # Generate audio file
-        tts = gTTS(text=podcast_script, lang="en", slow=False)
+        # ---------------- Azure TTS ----------------
+        speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
+
+        # Randomly choose one male + one female voice
+        male_voice = random.choice(MALE_VOICES)
+        female_voice = random.choice(FEMALE_VOICES)
+
+        ssml_parts = [
+            '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">'
+        ]
+        for line in podcast_script.splitlines():
+            if not line.strip():
+                continue
+            if line.startswith("Host:"):
+                text = saxutils.escape(line.replace("Host:", "").strip())
+                ssml_parts.append(
+                    f'<voice name="{male_voice}"><prosody rate="0%">{text}</prosody><break time="800ms"/></voice>'
+                )
+            elif line.startswith("Guest:"):
+                text = saxutils.escape(line.replace("Guest:", "").strip())
+                ssml_parts.append(
+                    f'<voice name="{female_voice}"><prosody rate="0%">{text}</prosody><break time="800ms"/></voice>'
+                )
+            else:
+                text = saxutils.escape(line.strip())
+                ssml_parts.append(
+                    f'<voice name="{male_voice}"><prosody rate="0%">{text}</prosody><break time="800ms"/></voice>'
+                )
+
+        ssml_parts.append('</speak>')
+
+        ssml_content = "\n".join(ssml_parts)
+
+        # Save audio file
         filename = secure_filename(f"podcast_{int(time.time())}.mp3")
         file_path = os.path.join(AUDIO_DIR, filename)
-        tts.save(file_path)
+        audio_config = speechsdk.audio.AudioOutputConfig(filename=file_path)
+
+        speech_synthesizer = speechsdk.SpeechSynthesizer(
+            speech_config=speech_config,
+            audio_config=audio_config
+        )
+        result = speech_synthesizer.speak_ssml_async(ssml_content).get()
+
+        if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
+            if result.reason == speechsdk.ResultReason.Canceled:
+                cancellation = result.cancellation_details
+                logger.error(f"TTS canceled: {cancellation.reason}, {cancellation.error_details}")
+                raise Exception(f"TTS canceled: {cancellation.reason}, {cancellation.error_details}")
+            raise Exception(f"TTS failed: {result.reason}")
+
         podcast_audio_url = f"http://localhost:5001/static/audio/{filename}"
 
         return jsonify({
             "script": podcast_script,
-            "audio_url": podcast_audio_url
+            "audio_url": podcast_audio_url,
+            "voices_used": {
+                "host": male_voice,
+                "guest": female_voice
+            }
         })
 
     except Exception as e:
         logger.exception("Error in generate_podcast")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
-
-
-#---------------------------#
-# positive pdf query          #
-#---------------------------#
-
-@app.route('/pdf_query', methods=['POST'])
-def pdf_query():
-    try:
-        import json
-        import urllib.parse
-        data = request.get_json(force=True)
-        if data is None:
-            return jsonify({"error": "Invalid JSON"}), 400
-
-        selectedText = data.get('selectedText')
-        documents = data.get('documents', [])
-        if not isinstance(documents, list):
-            return jsonify({"error": "documents must be a list"}), 400
-
-        if embedder is None:
-            return jsonify({"error": "Embedder not loaded on server"}), 500
-
-        query_text = selectedText
-        query_embedding = embedder.encode(query_text, normalize_embeddings=True)
-
-        section_data = []
-        for doc in documents:
-            filename = doc.get('filename') or doc.get('serverFilename') or doc.get('name')
-            sections_list = doc.get('sections')
-            if not sections_list:
-                outline_obj = doc.get('outline') or {}
-                sections_list = outline_obj.get('outline') if isinstance(outline_obj, dict) else None
-
-            if not sections_list:
-                continue
-
-            for item in sections_list:
-                if isinstance(item, dict) and 'text' in item and 'heading' in item:
-                    heading = item['heading']
-                    full_text = item['text']
-                    page = item.get('page')
-                    rects = item.get('rects', [])
-                    start_line = item.get('start_line')
-                    end_line = item.get('end_line')
-                    start_page = item.get('start_page')
-                    end_page = item.get('end_page')
-                elif isinstance(item, dict) and 'text' in item and 'level' in item:
-                    heading = item['text']
-                    full_text = item['text']
-                    page = item.get('page')
-                    rects = []
-                    start_line = end_line = start_page = end_page = None
-                else:
-                    heading = item.get('heading') if isinstance(item, dict) else str(item)
-                    full_text = item.get('text') if isinstance(item, dict) else heading
-                    page = item.get('page') if isinstance(item, dict) else None
-                    rects = item.get('rects') if isinstance(item, dict) else []
-                    start_line = item.get('start_line') if isinstance(item, dict) else None
-                    end_line = item.get('end_line') if isinstance(item, dict) else None
-                    start_page = item.get('start_page') if isinstance(item, dict) else None
-                    end_page = item.get('end_page') if isinstance(item, dict) else None
-
-                emb = embedder.encode(full_text, normalize_embeddings=True)
-                section_data.append({
-                    'Document': filename,
-                    'Page': page if page is not None else -1,
-                    'heading': heading,
-                    'text': full_text,
-                    'embedding': emb,
-                    'rects': rects,
-                    'start_line': start_line,
-                    'end_line': end_line,
-                    'start_page': start_page,
-                    'end_page': end_page
-                })
-
-        if not section_data:
-            return jsonify({"error": "No headings/sections found in supplied documents"}), 400
-
-        # Positive retrieval
-        top_k = min(5, len(section_data))
-        pos_indices, pos_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k, isContra=0)
-
-        # Negative retrieval (contradictory)
-        neg_query = generate_contradictory(selectedText)
-        neg_query_emb = embedder.encode(neg_query, normalize_embeddings=True)
-        neg_indices, neg_scores = mmr(neg_query_emb, section_data, lambda_param=0.72, top_k=0, isContra=1)
-
-        def build_output(indices, label):
-            now = datetime.now().isoformat()
-            out = {
-                "metadata": {
-                    "input_documents": [d.get('filename') for d in documents],
-                    "selected_text": selectedText if label == "Positive" else neg_query,
-                    "processing_timestamp": now
-                },
-                "extracted_sections": [],
-                "subsection_analysis": []
-            }
-
-            for rank, idx in enumerate(indices, start=1):
-                sec = section_data[idx]
-                out['extracted_sections'].append({
-                    "document": sec['Document'],
-                    "section_title": sec['heading'],
-                    "importance_rank": rank,
-                    "page_number": sec['Page'],
-                    "rects": sec.get('rects', []),
-                    "start_line": sec.get('start_line'),
-                    "end_line": sec.get('end_line'),
-                    "start_page": sec.get('start_page'),
-                    "end_page": sec.get('end_page')
-                })
-                out['subsection_analysis'].append({
-                    "document": sec['Document'],
-                    "refined_text": sec['text'],
-                    "page_number": sec['Page'],
-                    "rects": sec.get('rects', []),
-                    "start_line": sec.get('start_line'),
-                    "end_line": sec.get('end_line'),
-                    "start_page": sec.get('start_page'),
-                    "end_page": sec.get('end_page')
-                })
-
-            annotated_map = highlight_refined_texts(out)
-            sections_formatted = "\n\n".join(
-                f"Section {i+1} (Rank {sec.get('importance_rank', '?')}): {sec.get('section_title', 'Untitled')}\n{sec['refined_text']}"
-                for i, sec in enumerate(sorted(out['subsection_analysis'], key=lambda x: x.get('importance_rank', 999)))
-                if sec.get('refined_text')
-            )
-            out['sections_formatted'] = sections_formatted
-            out['metadata']['annotated_files'] = annotated_map
-            return out
-
-        output = {
-            "Positive": build_output(pos_indices, "Positive"),
-            "Negative": build_output(neg_indices, "Negative")
-        }
-        print("printing output ", output)
-        return jsonify(output)
-
-    except Exception as e:
-        logger.exception("Error in pdf_query")
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
-
-
-       
 @app.route('/role_query', methods=['POST'])
 def role_query():
     try:

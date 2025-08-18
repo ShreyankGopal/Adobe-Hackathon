@@ -7,7 +7,7 @@ pymupdf
 scikit-learn
 pandas
 joblib
-
+azure-cognitiveservices-speech
 # Optional: Add these if you need more PDF processing capabilities
 # pdfplumber==0.9.0
 # PyMuPDF==1.23.0
