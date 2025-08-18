@@ -453,7 +453,7 @@ const UploadPage: React.FC = () => {
                     key={pdf.id}
                     initial={{ scale: 0.98, opacity: 0, y: 8 }}
                     animate={{ scale: 1, opacity: 1, y: 0 }}
-                    whileHover={{ scale: 1.03 }}
+                    whileHover={{ scale: 1.0 }}
                     transition={{ delay: index * 0.04, duration: 0.35, ease: 'easeOut' }}
                   >
                     <PdfCard

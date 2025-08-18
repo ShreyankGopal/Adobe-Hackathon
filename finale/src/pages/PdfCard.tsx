@@ -32,7 +32,7 @@ const PdfCard: React.FC<Props> = ({ pdf, onRemove, onClick, isProcessing }) => {
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
+      whileHover={{ scale: 1.0 }}
       className="group relative w-full max-w-xs bg-slate-800 rounded-xl shadow-md overflow-hidden cursor-pointer border border-slate-700 hover:shadow-lg hover:border-slate-500 transition-all duration-300"
       onClick={() => onClick && onClick(pdf.id)}
       layout

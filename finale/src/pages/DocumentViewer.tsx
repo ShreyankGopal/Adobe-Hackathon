@@ -95,6 +95,7 @@ const DocumentViewer = () => {
             defaultViewMode: "FIT_PAGE",
             showAnnotationTools: true,
             enableSearchAPIs: true,
+            
           }
         )
         .then((viewer: any) => {
@@ -228,7 +229,8 @@ const DocumentViewer = () => {
         <motion.div
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
-          className="flex items-center py-3 px-4 rounded-lg cursor-pointer bg-primary-50 hover:bg-primary-100 transition-all duration-200"
+          className="flex items-center py-3 px-4 rounded-lg cursor-pointer 
+                     bg-[#1a1a1a] transition-all duration-200"
           onClick={() => toggleSection(section)}
         >
           <motion.div
@@ -236,10 +238,10 @@ const DocumentViewer = () => {
             transition={{ duration: 0.2 }}
             className="mr-2"
           >
-            <ChevronDown className="w-5 h-5 text-primary-600" />
+            <ChevronDown className="w-5 h-5 text-purple-400" />
           </motion.div>
-          <span className="font-semibold text-gray-800">{section}</span>
-          <span className="ml-2 text-sm text-gray-500">({items.length})</span>
+          <span className="font-semibold text-white">{section}</span>
+          <span className="ml-2 text-sm text-gray-400">({items.length})</span>
         </motion.div>
         <AnimatePresence>
           {isExpanded && (
@@ -248,18 +250,19 @@ const DocumentViewer = () => {
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="overflow-hidden ml-4"
+              className="overflow-hidden ml-4 space-y-1"
             >
               {items.map((item, index) => (
                 <div
                   key={index}
-                  className={`flex items-center py-2 px-4 rounded-lg cursor-pointer hover:bg-gray-100 transition-all duration-200 ${
-                    currentPage === item.page ? 'bg-primary-100' : ''
-                  }`}
+                  className={`flex items-center py-2 px-4 rounded-lg cursor-pointer 
+                             hover:bg-[#3B0B3B]/80 transition-all duration-200 border border-purple-700/50 bg-[#2A0A2A]/90
+
+                             `}
                   onClick={() => handleHeadingClick(item.page, item.text)}
                 >
-                  <span className="flex-1 truncate text-gray-700">{item.text}</span>
-                  <span className="text-sm text-primary-600 font-medium bg-primary-50 px-2 py-1 rounded">
+                  <span className="flex-1 truncate text-gray-200">{item.text}</span>
+                  <span className="text-sm text-purple-400 font-medium bg-[#1a1a1a]/70 px-2 py-1 rounded">
                     p.{item.page}
                   </span>
                 </div>
@@ -270,6 +273,7 @@ const DocumentViewer = () => {
       </div>
     );
   };
+  
 
   const groupedHeadings = groupHeadings();
 
@@ -277,7 +281,7 @@ const DocumentViewer = () => {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen bg-gray-50 flex"
+      className="min-h-screen bg-[#030303] flex"
     >
       <AnimatePresence>
         {sidebarOpen && (
@@ -286,26 +290,26 @@ const DocumentViewer = () => {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -400, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="w-80 lg:w-96 bg-white shadow-xl border-r border-gray-200 flex flex-col relative z-20"
+            className="w-80 lg:w-96 bg-[#1a1a1a] shadow-xl border-r border-purple-900/40 flex flex-col relative z-20"
           >
-            <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-primary-50 to-secondary-50">
+            <div className="p-6 border-b border-purple-900/40 bg-[#2A0A2A]/90">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
-                  <BookOpen className="w-6 h-6 text-primary-600" />
-                  <h2 className="text-lg font-semibold text-gray-800">Document Outline</h2>
+                  <BookOpen className="w-6 h-6 text-purple-400" />
+                  <h2 className="text-lg font-semibold text-white">Document Outline</h2>
                 </div>
                 <button
                   onClick={() => setSidebarOpen(false)}
-                  className="lg:hidden p-2 hover:bg-white/50 rounded-lg transition-colors"
+                  className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5 text-white" />
                 </button>
               </div>
-              <p className="text-sm text-gray-600 truncate font-medium" title={pdf.name}>
+              <p className="text-sm text-gray-300 truncate font-medium" title={pdf.name}>
                 {pdf.name}
               </p>
               {pdf.outline && (
-                <p className="text-xs text-primary-600 mt-1">
+                <p className="text-xs text-purple-400 mt-1">
                   {pdf.outline.outline.length} headings detected
                 </p>
               )}
@@ -318,14 +322,14 @@ const DocumentViewer = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
+  
       <div className="flex-1 flex flex-col">
-        <div className="bg-white shadow-sm border-b border-gray-200 p-4 lg:p-6 relative z-10">
+        <div className="bg-[#1a1a1a] shadow-sm border-b border-purple-900/40 p-4 lg:p-6 relative z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate(-1)}
-                className="btn-secondary"
+                className="btn-secondary text-white bg-purple-800/40 hover:bg-purple-700/50"
               >
                 <ArrowLeft className="w-5 h-5 mr-2" />
                 Back
@@ -333,28 +337,26 @@ const DocumentViewer = () => {
               {!sidebarOpen && (
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="btn-secondary lg:hidden"
+                  className="btn-secondary lg:hidden text-white bg-purple-800/40 hover:bg-purple-700/50"
                 >
                   <Menu className="w-5 h-5 mr-2" />
                   Show Outline
                 </button>
               )}
             </div>
-
-            {/* Removed large-screen Hide Outline toggle and Page indicator as requested */}
           </div>
         </div>
-
-        <div className="flex-1 bg-gradient-to-br from-gray-100 to-gray-200 p-4 lg:p-8">
+  
+        <div className="flex-1 bg-[#2A0A2A]/90 p-4 lg:p-8">
           <div className="max-w-5xl mx-auto h-full">
             <div
               id="pdf-viewer"
-              className="w-full h-full max-h-[90vh] bg-white rounded-2xl shadow-xl"
+              className="w-full h-full max-h-[90vh] bg-[#1a1a1a] rounded-2xl shadow-xl border border-purple-900/40"
             />
           </div>
         </div>
       </div>
-
+  
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-10 lg:hidden"
@@ -363,6 +365,7 @@ const DocumentViewer = () => {
       )}
     </motion.div>
   );
+  
 };
 
 export default DocumentViewer;
