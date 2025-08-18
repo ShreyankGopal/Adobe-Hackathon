@@ -27,7 +27,9 @@ from nltk.tokenize import word_tokenize
 import nltk
 import urllib.parse
 from datetime import datetime
-
+import azure.cognitiveservices.speech as speechsdk
+import random
+import xml.sax.saxutils as saxutils
 from RePDFBuildingNegative import highlight_refined_texts_negative
 nltk.download('punkt')
 nltk.download('punkt_tab')

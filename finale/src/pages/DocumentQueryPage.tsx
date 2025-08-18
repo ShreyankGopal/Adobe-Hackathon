@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { usePDF } from '../context/PDFContext';
 import PdfCard from './PdfCard';
@@ -9,7 +10,7 @@ declare global {
   interface Window {
     AdobeDC: {
       View: {
-        new (config: { clientId: string; divId: string }): AdobeDCView;
+        new(config: { clientId: string; divId: string }): AdobeDCView;
         Enum: {
           CallbackType: {
             EVENT_LISTENER: string;
@@ -54,20 +55,21 @@ interface AdobeDCView {
   ): void;
 }
 
+
 const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
     }
-  };
-  
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
-  };
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 }
+};
 
 const PdfQueryPage: React.FC = () => {
   const { pdfs, removePDF, isProcessing } = usePDF();
@@ -81,10 +83,7 @@ const PdfQueryPage: React.FC = () => {
   const navigate = useNavigate();
   const [originalFilename, setOriginalFilename] = useState<string | null>(null);
   const [showResults, setShowResults] = useState<boolean>(false);
-  
-  // State for the AI Insights Hub
   const [isInsightsPanelOpen, setIsInsightsPanelOpen] = useState(false);
-  const [combinedInsights, setCombinedInsights] = useState<any>(null);
 
   const STORAGE_KEYS = {
     positiveResult: 'pdfQuery.result',
@@ -94,33 +93,17 @@ const PdfQueryPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // This effect restores the entire state on page load/re-visit
     try {
       const storedShow = sessionStorage.getItem(STORAGE_KEYS.showResults);
       if (storedShow === '1') {
-        const storedResult = sessionStorage.getItem(STORAGE_KEYS.result);
-        const storedNegative = sessionStorage.getItem(STORAGE_KEYS.negative);
+        const storedResult = sessionStorage.getItem(STORAGE_KEYS.positiveResult);
+        const storedNegative = sessionStorage.getItem(STORAGE_KEYS.negativeResult);
         const storedText = sessionStorage.getItem(STORAGE_KEYS.selectedText) || '';
-        
-        const parsedResult = storedResult ? JSON.parse(storedResult) : null;
-        const parsedNegative = storedNegative ? JSON.parse(storedNegative) : null;
 
-        setResult(parsedResult);
-        setNegativeResult(parsedNegative);
+        setResult(storedResult ? JSON.parse(storedResult) : null);
+        setNegativeResult(storedNegative ? JSON.parse(storedNegative) : null);
         setSelectedText(storedText);
         setShowResults(true);
-
-        // Also restore combined insights
-        // if (parsedResult?.insights && parsedNegative?.insights) {
-        //   setCombinedInsights({
-        //     summary: `${parsedResult.insights.summary}\n\n${parsedNegative.insights.summary}`,
-        //     didYouKnow: `${parsedResult.insights.didYouKnow}\n\n${parsedNegative.insights.didYouKnow}`,
-        //     podcast: {
-        //       script: `${parsedResult.insights.podcast.script}\n\n${parsedNegative.insights.podcast.script}`,
-        //       audio_url: parsedResult.insights.podcast.audio_url // Or combine them if logic allows
-        //     }
-        //   });
-        // }
       }
     } catch (e) {
       console.warn('Failed to restore persisted pdf query:', e);
@@ -132,12 +115,9 @@ const PdfQueryPage: React.FC = () => {
   };
 
   const handleSimilarityClick = () => {
-    console.log("result", result);
-    
     navigate('/similarity', { state: { result, selectedText } });
   };
   const handleContradictoryClick = () => {
-    console.log("negativeResult", negativeResult);
     navigate('/contradictory', { state: { negativeResult, selectedText } });
   };
   const handlePDFClick = (id: string | number) => {
@@ -157,7 +137,6 @@ const PdfQueryPage: React.FC = () => {
     setShowResults(false);
     setResult(null);
     setNegativeResult(null);
-    setCombinedInsights(null);
 
     const formData = new FormData();
     formData.append('pdf', file);
@@ -178,14 +157,14 @@ const PdfQueryPage: React.FC = () => {
       setError('Error uploading PDF');
     }
   };
-  
+
   useEffect(() => {
     let adobeDCView: any;
 
     const initializeAdobePDFViewer = (serverFilename: string, originalName: string) => {
       if (window.AdobeDC) {
         adobeDCView = new window.AdobeDC.View({
-          clientId: import.meta.env.VITE_ADOBE_CLIENT_ID, // Replace with your Adobe Client ID
+          clientId: import.meta.env.VITE_ADOBE_CLIENT_ID,
           divId: "pdf-viewer",
         });
 
@@ -240,11 +219,10 @@ const PdfQueryPage: React.FC = () => {
       setError('Please select text from the PDF to query');
       return;
     }
-    
+
     setError(null);
     setLoading(true);
     setShowResults(false);
-    setCombinedInsights(null);
 
     const documentsPayload = pdfs.map(p => ({
       filename: p.serverFilename,
@@ -261,7 +239,6 @@ const PdfQueryPage: React.FC = () => {
       });
 
       const data = await respPositive.json();
-      console.log(data);
       if (!respPositive.ok) {
         throw new Error(data?.error || 'One of the requests failed');
       }
@@ -275,7 +252,7 @@ const PdfQueryPage: React.FC = () => {
       sessionStorage.setItem(STORAGE_KEYS.selectedText, selectedText);
       sessionStorage.setItem(STORAGE_KEYS.showResults, '1');
 
-     
+
     } catch (err: any) {
       setError(err.message || 'Unknown error');
     } finally {
@@ -283,251 +260,117 @@ const PdfQueryPage: React.FC = () => {
     }
   };
 
+  const insightsText = selectedText + (result?.sections_formatted || '') + (negativeResult?.sections_formatted || '');
+
   return (
     <div className="min-h-screen bg-[#030303]">
-  <nav className="relative z-10 bg-transparent p-4 text-white mb-4">
-    <div className="max-w-7xl mx-auto flex justify-between items-center">
-      <Link
-        to="/"
-        className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
-      >
-        Home
-      </Link>
-      <Link
-        to="/query"
-        className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
-      >
-        Role Based Query
-      </Link>
-      <Link
-        to="/QueryDocument"
-        className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors transform transition-transform duration-200 hover:scale-110"
-      >
-        Query Document
-      </Link>
-    </div>
-  </nav>
-
-  <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[calc(100vh-120px)]">
-    {/* Sidebar */}
-    <div className="lg:col-span-1 bg-[#2A0A2A]/90 rounded-xl shadow-xl border border-purple-900/40 p-4 flex flex-col max-h-full">
-      <div className="flex-shrink-0">
-        <h2 className="text-lg font-bold text-white mb-1">Document Query</h2>
-        <p className="text-xs text-gray-300 mb-5">
-          Select text from an uploaded PDF to analyze.
-        </p>
-      </div>
-
-      <div className="space-y-4 flex-shrink-0">
-        {/* Upload PDF */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-200 mb-2">
-            Upload PDF
-          </label>
-          <div className="relative">
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              className="hidden"
-              id="pdf-upload"
-            />
-            <label
-              htmlFor="pdf-upload"
-              className="w-full rounded-xl border border-dashed border-purple-800/60 
-                         bg-[#111] hover:bg-purple-900/30 
-                         p-6 flex flex-col items-center justify-center text-center 
-                         cursor-pointer transition-all duration-300 ease-in-out
-                         hover:border-purple-500/70"
-            >
-              {selectedFile ? (
-                <div className="text-sm">
-                  <div className="text-gray-400 text-xs">Click to change</div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center text-gray-400">
-                  <div className="text-3xl mb-2">📄</div>
-                  <div className="text-sm">Click to upload PDF</div>
-                </div>
-              )}
-            </label>
-          </div>
+      <nav className="relative z-10 bg-transparent p-4 text-white mb-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <Link to="/" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">Home</Link>
+          <Link to="/query" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">Role Based Query</Link>
+          <Link to="/QueryDocument" className="text-lg font-semibold hover:text-[#4DA3FF] transition-colors">Query Document</Link>
         </div>
+      </nav>
 
-        {/* Selected Text */}
-        <div>
-          <label className="block text-xs font-semibold text-gray-200 mb-2">
-            Selected Text
-          </label>
-          <div className="min-h-[80px] max-h-32 border border-purple-800/40 rounded-lg p-3 text-sm bg-[#2A0A2A]/90 text-gray-100 overflow-y-auto">
-            {selectedText}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[calc(100vh-120px)]">
+        <div className="lg:col-span-1 bg-[#2A0A2A]/90 rounded-xl shadow-xl border border-purple-900/40 p-4 flex flex-col">
+          <div className="flex-shrink-0">
+            <h2 className="text-lg font-bold text-white mb-1">Document Query</h2>
+            <p className="text-xs text-gray-300 mb-5">Select text from an uploaded PDF to analyze.</p>
           </div>
-        </div>
 
-        {/* Submit + Results */}
-        <div className="space-y-3 pt-2">
-          {!showResults ? (
-            <button
-              onClick={handleSubmit}
-              className="w-full py-2.5 text-sm font-semibold rounded-lg 
-                         bg-purple-600 text-white 
-                         hover:from-indigo-700 hover:to-purple-700 
-                         transition-all shadow-lg hover:shadow-xl 
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading || !selectedFile || !selectedText}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 
-                         0 5.373 0 12h4zm2 5.291A7.962 
-                         7.962 0 014 12H0c0 3.042 1.135 
-                         5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Processing...
-                </span>
-              ) : (
-                "Submit Query"
-              )}
-            </button>
-          ) : (
-            <div className="bg-[#2A0A2A]/90 border border-purple-800/40 p-4 rounded-xl space-y-4 flex flex-col items-center justify-center text-center shadow-lg">
-  <p className="text-sm font-semibold text-purple-200 tracking-wide">Query Complete!</p>
-
-  <div className="flex flex-col sm:flex-row gap-4 w-full">
-    <motion.button
-      whileHover={{ scale: 1.05 }}
-      className="flex-1 py-3 sm:py-2 text-sm font-semibold rounded-xl 
-                 bg-gradient-to-r from-purple-700 to-purple-900 
-                 text-white shadow-md hover:shadow-lg transition-all duration-300"
-      onClick={handleSimilarityClick}
-    >
-      Similarities
-    </motion.button>
-
-    <motion.button
-      whileHover={{ scale: 1.05 }}
-      className="flex-1 py-3 sm:py-2 text-sm font-semibold rounded-xl 
-                 bg-gradient-to-r from-pink-700 to-rose-900 
-                 text-white shadow-md hover:shadow-lg transition-all duration-300"
-      onClick={handleContradictoryClick}
-    >
-      Contradictions
-    </motion.button>
-  </div>
-
-  <button
-    onClick={() => setIsInsightsPanelOpen(!isInsightsPanelOpen)}
-    className="relative px-4 py-2 rounded-xl font-semibold text-sm text-white 
-               transition-all duration-500 
-               bg-gradient-to-r from-fuchsia-500 via-purple-600 to-violet-700 
-               bg-[length:300%_300%] animate-gradientMove 
-               shadow-md hover:shadow-lg overflow-hidden group"
-  >
-    {/* Shine effect */}
-    <span
-      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent 
-                 -translate-x-[200%] group-hover:translate-x-[200%] 
-                 transition-transform duration-700 ease-in-out"
-    ></span>
-    <span className="relative z-10">AI Insights</span>
-  </button>
-</div>
-
-          )}
-        </div>
-
-        {error && (
-          <div className="text-xs text-red-400 bg-red-900/40 p-2 rounded-lg border border-red-800">
-            {error}
-          </div>
-        )}
-      </div>
-
-      {/* PDF List */}
-      <div className="mt-4 flex-1 min-h-0 flex flex-col">
-        <h3 className="text-sm font-semibold text-gray-200 mb-2 flex-shrink-0">
-          Source PDFs ({pdfs.length})
-        </h3>
-        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-purple-700 scrollbar-track-transparent max-h-[calc(62vh-200px)]">
-          {pdfs.length > 0 ? (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="show"
-            >
-              <div className="space-y-2">
-                {pdfs.map((pdf) => (
-                  <motion.div key={pdf.id} variants={itemVariants}>
-                    <PdfCard
-                      pdf={pdf}
-                      onRemove={(id) => handleRemovePDF(id)}
-                      onClick={(id) => handlePDFClick(id)}
-                      isProcessing={(name) =>
-                        isProcessing ? isProcessing(name) : false
-                      }
-                    />
-                  </motion.div>
-                ))}
+          <div className="space-y-4 flex-shrink-0">
+            <div>
+              <label className="block text-xs font-semibold text-gray-200 mb-2">Upload PDF</label>
+              <div className="relative">
+                <input type="file" accept=".pdf" onChange={handleFileUpload} className="hidden" id="pdf-upload" />
+                <label htmlFor="pdf-upload" className="w-full rounded-xl border border-dashed border-purple-800/60 bg-[#111] hover:bg-purple-900/30 p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all">
+                  {selectedFile ? (
+                    <div className="text-sm text-green-400">{selectedFile.name}</div>
+                  ) : (
+                    <div className="flex flex-col items-center text-gray-400">
+                      <div className="text-3xl mb-2">📄</div>
+                      <div className="text-sm">Click to upload PDF</div>
+                    </div>
+                  )}
+                </label>
               </div>
-            </motion.div>
-          ) : (
-            <div className="text-xs text-gray-400 text-center py-8 border-2 border-dashed border-purple-800/40 rounded-lg">
-              No PDFs uploaded yet
             </div>
-          )}
-        </div>
-      </div>
-    </div>
 
-    {/* Main PDF Viewer */}
-    <div className="lg:col-span-3 flex-1 bg-[#2A0A2A]/90 rounded-xl border border-purple-900/40 p-4 lg:p-8 order-2 lg:order-2">
-      <div className="max-w-5xl mx-auto h-full">
-        {selectedFile && uploadedPdfUrl ? (
-          <div
-            id="pdf-viewer"
-            className="w-full h-full max-h-[90vh] bg-[#111] rounded-2xl border border-purple-900/40 shadow-xl"
-          />
-        ) : (
-          <div className="h-full flex flex-col justify-center items-center text-gray-400 border-2 border-dashed border-purple-800/40 rounded-2xl bg-[#111] shadow-xl">
-            <div className="text-6xl mb-4">📄</div>
-            <div className="text-xl font-semibold mb-2 text-white">
-              No PDF Selected
+            <div>
+              <label className="block text-xs font-semibold text-gray-200 mb-2">Selected Text</label>
+              <div className="min-h-[80px] max-h-32 border border-purple-800/40 rounded-lg p-3 text-sm bg-[#111] text-gray-100 overflow-y-auto">
+                {selectedText || <span className="text-gray-500">Select text from the PDF viewer...</span>}
+              </div>
             </div>
-            <div className="text-sm text-gray-300">
-              Upload a PDF file to view and query it
+
+            <div className="space-y-3 pt-2">
+              {!showResults ? (
+                <button onClick={handleSubmit} className="w-full py-2.5 text-sm font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all shadow-lg disabled:opacity-50" disabled={loading || !selectedFile || !selectedText}>
+                  {loading ? 'Processing...' : 'Submit Query'}
+                </button>
+              ) : (
+                <div className="bg-[#111]/90 border border-purple-800/40 p-4 rounded-xl space-y-4 text-center">
+                  <p className="text-sm font-semibold text-purple-200">Query Complete!</p>
+                  <div className="flex flex-col sm:flex-row gap-4 w-full">
+                    <motion.button whileHover={{ scale: 1.05 }} className="flex-1 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-purple-700 to-purple-900 text-white shadow-md" onClick={handleSimilarityClick}>
+                      Similarities
+                    </motion.button>
+                    <motion.button whileHover={{ scale: 1.05 }} className="flex-1 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-pink-700 to-rose-900 text-white shadow-md" onClick={handleContradictoryClick}>
+                      Contradictions
+                    </motion.button>
+                  </div>
+                  <button onClick={() => setIsInsightsPanelOpen(true)} className="relative px-4 py-2 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-fuchsia-500 via-purple-600 to-violet-700 bg-[length:300%_300%] animate-gradientMove shadow-md group">
+                    <span className="relative z-10">AI Insights Hub</span>
+                  </button>
+                </div>
+              )}
+            </div>
+            {error && <div className="text-xs text-red-400 bg-red-900/30 p-2 rounded-lg border border-red-800">{error}</div>}
+          </div>
+
+          <div className="mt-4 flex-1 min-h-0 flex flex-col">
+            <h3 className="text-sm font-semibold text-gray-200 mb-2 flex-shrink-0">Source PDFs ({pdfs.length})</h3>
+            <div className="flex-1 overflow-y-auto pr-2">
+              {pdfs.length > 0 ? (
+                <motion.div variants={containerVariants} initial="hidden" animate="show">
+                  <div className="space-y-2">
+                    {pdfs.map((pdf) => (
+                      <motion.div key={pdf.id} variants={itemVariants}>
+                        <PdfCard pdf={pdf} onRemove={handleRemovePDF} onClick={handlePDFClick} isProcessing={isProcessing} />
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="text-xs text-gray-400 text-center py-8 border-2 border-dashed border-purple-800/40 rounded-lg">
+                  No source PDFs uploaded
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
+
+        <div className="lg:col-span-3 bg-[#111] rounded-xl border border-purple-900/40 p-4">
+            {selectedFile && uploadedPdfUrl ? (
+              <div id="pdf-viewer" className="w-full h-full min-h-[85vh] rounded-lg" />
+            ) : (
+              <div className="h-full flex flex-col justify-center items-center text-gray-400 border-2 border-dashed border-purple-800/40 rounded-lg">
+                <div className="text-6xl mb-4">📄</div>
+                <div className="text-xl font-semibold text-white">No PDF Selected</div>
+                <div className="text-sm text-gray-300">Upload a PDF to view and query it</div>
+              </div>
+            )}
+        </div>
       </div>
+
+      <RightPanel
+        visible={isInsightsPanelOpen}
+        onClose={() => setIsInsightsPanelOpen(false)}
+        pageType="query"
+        text={insightsText}
+      />
     </div>
-  </div>
-
-  <RightPanel
-    visible={isInsightsPanelOpen}
-    onClose={() => setIsInsightsPanelOpen(false)}
-    text={selectedText+result?.sections_formatted+negativeResult?.sections_formatted}
-    feature="full"
-  />
-</div>
-
   );
 };
 
