@@ -7,16 +7,17 @@ interface RightPanelProps {
   visible: boolean;
   onClose: () => void;
   text: string;
-  feature: 'full' | 'contra' | 'simi' | 'insights'; // 👈 new prop
+  feature: 'full' | 'contra' | 'simi' | 'insights';
 }
 
 const STORAGE_TYPES = ['summary', 'didYouKnow', 'podcast'] as const;
 type ContentType = typeof STORAGE_TYPES[number];
 
 const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature }) => {
-  //console.log('Text to be printed in right panel ', text);
   const [loading, setLoading] = useState<ContentType | null>(null);
   const [content, setContent] = useState<Record<string, any>>({});
+  const [displayedSummary, setDisplayedSummary] = useState<string>("");
+  const [triggeredSummary, setTriggeredSummary] = useState<boolean>(false); // 👈 new flag
 
   // Load from sessionStorage for current feature
   useEffect(() => {
@@ -29,10 +30,34 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
     setContent(restoredContent);
   }, [feature]);
 
+  // Typing effect for summary (only if explicitly triggered by click)
+  useEffect(() => {
+    if (!triggeredSummary) return;
+
+    const summaryData = content.summary?.summary;
+    if (!summaryData) return;
+
+    setDisplayedSummary(""); // reset before animation
+
+    const words = summaryData.split(" ");
+    let i = 0;
+
+    const interval = setInterval(() => {
+      if (i == words.length-1) {
+        clearInterval(interval);
+        return;
+      }
+      setDisplayedSummary(prev => prev + (i === 0 ? "" : " ") + words[i]);
+      i++;
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [content.summary, triggeredSummary]);
+
   if (!visible) return null;
 
   const handleGenerate = async (type: ContentType) => {
-    console.log(text)
+    console.log(text);
     setLoading(type);
     try {
       let endpoint = '';
@@ -56,9 +81,14 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
       // Save in state
       setContent(prev => ({ ...prev, [type]: data }));
 
-      // Save in sessionStorage with feature prefix
+      // Save in sessionStorage
       const storageKey = `${feature}_${type}`;
       sessionStorage.setItem(storageKey, JSON.stringify(data));
+
+      // 👇 Mark summary as triggered only when user clicks
+      if (type === "summary") {
+        setTriggeredSummary(true);
+      }
 
     } catch (err) {
       console.error(err);
@@ -93,7 +123,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
             Summary
           </h3>
           <div className="text-gray-200 whitespace-pre-wrap bg-gray-800 p-3 rounded-lg max-h-60 overflow-y-auto">
-            <ReactMarkdown>{data.summary}</ReactMarkdown>
+            <ReactMarkdown>{displayedSummary}</ReactMarkdown>
           </div>
         </div>
       );
@@ -120,19 +150,14 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
             <Headphones className="w-5 h-5 mr-2" />
             Podcast
           </h3>
-          {/* Use this where you render the player */}
           <audio
             controls
             src={data.audio_url}
             className="audio-dark w-full mb-3"
           />
 
-          {/* Drop this style block somewhere once (e.g., in the component or a global CSS file) */}
           <style jsx>{`
-            /* Hint controls to use dark palette */
             .audio-dark { color-scheme: dark; }
-
-            /* Chromium/Safari: set control panel background */
             .audio-dark::-webkit-media-controls-panel {
               background-color: #1a1a1a;
             }
@@ -140,8 +165,6 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
               background-color: #1a1a1a;
               border-radius: 0.5rem;
             }
-
-            /* Optional: tweak time/volume rails contrast a bit */
             .audio-dark::-webkit-media-controls-timeline,
             .audio-dark::-webkit-media-controls-volume-slider {
               filter: contrast(1.1) saturate(0.9);
@@ -178,7 +201,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
       <div className="p-4 overflow-y-auto flex-1 space-y-6">
         {/* Action buttons */}
         <div className="flex flex-col gap-4">
-          {/* Pink - Summary */}
+          {/* Summary */}
           <button
             onClick={() => handleGenerate('summary')}
             className="w-full py-3 text-white font-bold rounded-lg bg-[#274060] hover:bg-[#1B263B] transition-all shadow-lg"
@@ -187,7 +210,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
             Generate Summary
           </button>
   
-          {/* Purple - Did You Know */}
+          {/* Did You Know */}
           <button
             onClick={() => handleGenerate('didYouKnow')}
             className="w-full py-3 text-white font-bold rounded-lg bg-[#274060] hover:bg-[#1B263B] transition-all shadow-lg"
@@ -196,7 +219,7 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
             Generate Did You Know
           </button>
   
-          {/* Blue - Podcast */}
+          {/* Podcast */}
           {feature !== 'insights' && (
             <button
               onClick={() => handleGenerate('podcast')}
@@ -217,7 +240,6 @@ const RightPanel: React.FC<RightPanelProps> = ({ visible, onClose, text, feature
       </div>
     </motion.div>
   );
-  
 };
 
 export default RightPanel;
