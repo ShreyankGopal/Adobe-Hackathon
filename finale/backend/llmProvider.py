@@ -36,16 +36,16 @@ class LLMClient:
         if not configure or not GenerativeModel:
             raise ImportError("google-generativeai is not installed. Install with `pip install google-generativeai`.")
 
-        # creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        # if not creds_path or not os.path.exists(creds_path):
-        #     raise FileNotFoundError("Missing or invalid GOOGLE_APPLICATION_CREDENTIALS file path.")
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not creds_path or not os.path.exists(creds_path):
+            raise FileNotFoundError("Missing or invalid GOOGLE_APPLICATION_CREDENTIALS file path.")
 
-        # with open(creds_path, "r") as f:
-        #     creds = json.load(f)
+        with open(creds_path, "r") as f:
+            creds = json.load(f)
 
-        # api_key = creds.get("api_key")
+        api_key = creds.get("api_key")
         # print(api_key)
-        api_key = os.getenv("GEMINI_API_KEY")
+        #api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("Google credentials file missing 'api_key'.")
 
