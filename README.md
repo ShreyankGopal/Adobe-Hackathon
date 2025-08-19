@@ -123,30 +123,40 @@ python app.py
 
 ### 1. Document Upload
 - Navigate to the **Home** page
+- ![Home Page ](homePage.png)
 - Upload multiple PDFs (25-30 documents recommended)
+- ![Upload PDFs View ](uploadPdfPage.png)
 - System automatically processes and extracts sections
 - Documents are stored and indexed for quick retrieval
 
 ### 2. Query PDF Workflow
 - Go to **Query PDF** page
 - Select a PDF from your uploaded collection
+- ![Query PDF Page Select Text](queryPdfSelectText.png)
 - Highlight any text within the PDF
 - Click **Submit** to trigger analysis
+- ![Query PDF Page Results Displayed](queryPdfResultsReady.png)
 
 #### Results Pages:
 - **Similarity**: View top 5 related sections across all documents
+- ![Similarity View](similarityPage.png)
 - **Contradictory**: Discover conflicting information and opposing viewpoints
 - **AI Insights**: Generate summaries, facts, and podcasts
+- ![AI Insights View](AI_Insights_View.png)
 
 ### 3. Role-Based Query Workflow
 - Navigate to **Role Query** page
 - Enter your role (e.g., "Marketing Manager")
 - Specify your task (e.g., "Create a social media strategy")
+- ![roleBasedQueryPage](roleBasedQueryPage.png)
 - Get ranked sections relevant to your persona and objectives
+- ![roleBasedQueryResults](roleBasedQueryResults.png)
 
 ### 4. Deep Dive Analysis
 - Click on any section to view in original PDF context
+- ![sectionInsights](sectionHighlighting.png)
 - Generate section-specific insights
+- ![section_specific_AI_insights](section_specific_AI_insights.png)
 - Navigate seamlessly between related content
 
 ## 🔧 Technical Implementation
