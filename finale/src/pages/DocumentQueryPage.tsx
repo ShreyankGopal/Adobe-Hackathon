@@ -164,7 +164,7 @@ const PdfQueryPage: React.FC = () => {
     const initializeAdobePDFViewer = (serverFilename: string, originalName: string) => {
       if (window.AdobeDC) {
         adobeDCView = new window.AdobeDC.View({
-          clientId: import.meta.env.VITE_ADOBE_CLIENT_ID,
+          clientId: ce717f3e6e444a8893c4c7e873884e35,
           divId: "pdf-viewer",
         });
 
