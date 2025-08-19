@@ -69,7 +69,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
     if (!summaryData) return;
 
     setDisplayedQuerySummary("");
-    let i = 0;
+    let i = -1;
     const interval = setInterval(() => {
       setDisplayedQuerySummary(prev => prev + summaryData.charAt(i));
       i++;
@@ -90,7 +90,7 @@ const RightPanel: React.FC<RightPanelProps> = ({
     if (pageType === 'section' && summary) {
       if (!isSummaryAnimated) {
         setDisplayedSectionSummary('');
-        let i = 0;
+        let i = -1;
         const interval = setInterval(() => {
           setDisplayedSectionSummary(prev => prev + summary.charAt(i));
           i++;
