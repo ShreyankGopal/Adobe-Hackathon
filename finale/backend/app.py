@@ -22,18 +22,18 @@ import traceback
 from werkzeug.utils import secure_filename
 from gtts import gTTS
 import os, time, traceback
-from nltk.corpus import wordnet
-from nltk.tokenize import word_tokenize
-import nltk
+# from nltk.corpus import wordnet
+# from nltk.tokenize import word_tokenize
+# import nltk
 import urllib.parse
 from datetime import datetime
 import azure.cognitiveservices.speech as speechsdk
 import random
 import xml.sax.saxutils as saxutils
 from RePDFBuildingNegative import highlight_refined_texts_negative
-nltk.download('punkt')
-nltk.download('punkt_tab')
-nltk.download('wordnet')
+# nltk.download('punkt')
+# nltk.download('punkt_tab')
+# nltk.download('wordnet')
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,23 +53,23 @@ embedder = None
 #-------------------------
 # generate contradictory
 #-------------------------
-def generate_contradictory(text):
-    tokens = word_tokenize(text)
-    contradictory_tokens = []
+# def generate_contradictory(text):
+#     tokens = word_tokenize(text)
+#     contradictory_tokens = []
 
-    for token in tokens:
-        antonyms = []
-        for syn in wordnet.synsets(token):
-            for lemma in syn.lemmas():
-                if lemma.antonyms():
-                    antonyms.append(lemma.antonyms()[0].name())
+#     for token in tokens:
+#         antonyms = []
+#         for syn in wordnet.synsets(token):
+#             for lemma in syn.lemmas():
+#                 if lemma.antonyms():
+#                     antonyms.append(lemma.antonyms()[0].name())
 
-        if antonyms:
-            contradictory_tokens.append(antonyms[0])  # pick first antonym
-        else:
-            contradictory_tokens.append(token)
+#         if antonyms:
+#             contradictory_tokens.append(antonyms[0])  # pick first antonym
+#         else:
+#             contradictory_tokens.append(token)
 
-    return " ".join(contradictory_tokens)
+#     return " ".join(contradictory_tokens)
 #-------------------------
 # load model
 #-------------------------
@@ -385,8 +385,8 @@ def mmr(query_emb, sections, lambda_param, top_k, isContra=0):
                 for i in range(len(sections))
             ]
 
-    if isContra:  # only return indices with similarity > 0.6
-        contra_indices = [i for i, score in enumerate(sim_q) if score > 0.6]
+    if isContra:  # only return indices with similarity < 0
+        contra_indices = [i for i, score in enumerate(sim_q) if score < 0]
         return contra_indices, sim_q
 
     # normal mmr
@@ -407,6 +407,7 @@ def mmr(query_emb, sections, lambda_param, top_k, isContra=0):
             selected.append(idx)
             remaining.remove(idx)
     return selected, sim_q
+
 #--------------------------------------- #
 #     only to upload file                #
 #--------------------------------------- #
@@ -1018,16 +1019,16 @@ def pdf_query():
         pos_indices, pos_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=top_k, isContra=0)
 
         # Negative retrieval (contradictory)
-        neg_query = generate_contradictory(selectedText)
-        neg_query_emb = embedder.encode(neg_query, normalize_embeddings=True)
-        neg_indices, neg_scores = mmr(neg_query_emb, section_data, lambda_param=0.72, top_k=0, isContra=1)
+        #neg_query = generate_contradictory(selectedText)
+        #neg_query_emb = embedder.encode(neg_query, normalize_embeddings=True)
+        neg_indices, neg_scores = mmr(query_embedding, section_data, lambda_param=0.72, top_k=0, isContra=1)
 
         def build_output(indices, label):
             now = datetime.now().isoformat()
             out = {
                 "metadata": {
                     "input_documents": [d.get('filename') for d in documents],
-                    "selected_text": selectedText if label == "Positive" else neg_query,
+                    "selected_text": selectedText,
                     "processing_timestamp": now
                 },
                 "extracted_sections": [],
