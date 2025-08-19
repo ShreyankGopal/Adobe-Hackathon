@@ -794,37 +794,16 @@ def generate_didyouknow():
 @app.route('/generate_podcast', methods=['POST'])
 def generate_podcast():
     try:
+        # Example voice lists for Azure OpenAI TTS (can be customized)
+        MALE_VOICES = ["alloy", "echo", "onyx"]
+        FEMALE_VOICES = ["fable", "nova", "shimmer"]
 
-        # Directory to save audio files
+        # Example voices for Cognitive Services fallback
+        CS_MALE_VOICES = ["en-IN-ArjunNeural", "en-IN-PrabhatNeural"]
+        CS_FEMALE_VOICES = ["en-IN-AartiNeural", "en-IN-AnanyaNeural"]
+
         AUDIO_DIR = os.path.join(os.getcwd(), "static/audio")
         os.makedirs(AUDIO_DIR, exist_ok=True)
-
-        # Azure Speech credentials
-        AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
-        AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION")
-
-        # Voices (expand as needed)
-        MALE_VOICES = [
-            "en-IN-ArjunIndicNeural",
-            "en-IN-PrabhatIndicNeural",
-            "en-IN-AaravNeural",
-            "en-IN-ArjunNeural",
-            "en-IN-KunalNeural",
-            "en-IN-PrabhatNeural",
-            "en-IN-RehaanNeural",
-            "en-IN-Arjun:DragonHDV1.1.2Neural"
-        ]
-
-        FEMALE_VOICES = [
-            "en-IN-AartiIndicNeural",
-            "en-IN-NeerjaIndicNeural",
-            "en-IN-AashiNeural",
-            "en-IN-AartiNeural",
-            "en-IN-AnanyaNeural",
-            "en-IN-KavyaNeural",
-            "en-IN-NeerjaNeural",
-            "en-IN-Aarti:DragonHDV1.1.1Neural"
-        ]
 
         data = request.get_json(force=True)
         if not data:
@@ -840,9 +819,9 @@ def generate_podcast():
         Host: ...
         Guest: ...
         Make the conversation fun, natural, and informative, focusing on the text below. Ensure that you:
-        1. Respond only with the script between the two. 
+        1. Respond only with the script between the two. Do not write verbal descriptions of sound effects.
         2. Make sure the script doesn't have formatting like bold and italics. 
-        3. You can give the host and guest an Indian male and female name respectively, as well as an interesting podcast name.
+        3. Do not give the host and guest any name. You may give the podcast an interesting name which the host uses in the introduction.
         """
 
         prompt = f"""
@@ -852,73 +831,75 @@ def generate_podcast():
         {text_content}
         ---
         """
-        # speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
-        # synth = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=None)
-        # voices = synth.get_voices_async().get()
 
-        # if voices.reason == speechsdk.ResultReason.VoicesListRetrieved:
-        #     logger.info("Available voices:")
-        #     for v in voices.voices:
-        #         logger.info(v.short_name)
-        # else:
-        #     logger.warning("Could not retrieve voices, reason: %s", voices.reason)
-
-        logger.info("Generated Prompt:\n%s", prompt)
-
-        # Generate script using your LLM
+        # ---------------- LLM Generation ----------------
         podcast_script = llm.generate(prompt).strip()
         logger.info("Generated Script:\n%s", podcast_script)
 
-        # ---------------- Azure TTS ----------------
-        speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
-
-        # Randomly choose one male + one female voice
-        male_voice = random.choice(MALE_VOICES)
-        female_voice = random.choice(FEMALE_VOICES)
-
-        ssml_parts = [
-            '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">'
-        ]
+        # Split podcast script by speaker
+        tts_segments = []
         for line in podcast_script.splitlines():
             if not line.strip():
                 continue
             if line.startswith("Host:"):
-                text = saxutils.escape(line.replace("Host:", "").strip())
-                ssml_parts.append(
-                    f'<voice name="{male_voice}"><prosody rate="0%">{text}</prosody><break time="800ms"/></voice>'
-                )
+                tts_segments.append((line.replace("Host:", "").strip(), "male"))
             elif line.startswith("Guest:"):
-                text = saxutils.escape(line.replace("Guest:", "").strip())
-                ssml_parts.append(
-                    f'<voice name="{female_voice}"><prosody rate="0%">{text}</prosody><break time="800ms"/></voice>'
-                )
+                tts_segments.append((line.replace("Guest:", "").strip(), "female"))
             else:
-                text = saxutils.escape(line.strip())
-                ssml_parts.append(
-                    f'<voice name="{male_voice}"><prosody rate="0%">{text}</prosody><break time="800ms"/></voice>'
-                )
+                tts_segments.append((line.strip(), "male"))
 
-        ssml_parts.append('</speak>')
-
-        ssml_content = "\n".join(ssml_parts)
-
-        # Save audio file
+        # Generate unique filename
         filename = secure_filename(f"podcast_{int(time.time())}.mp3")
         file_path = os.path.join(AUDIO_DIR, filename)
-        audio_config = speechsdk.audio.AudioOutputConfig(filename=file_path)
 
-        speech_synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=speech_config,
-            audio_config=audio_config
-        )
-        result = speech_synthesizer.speak_ssml_async(ssml_content).get()
+        # ---------------- Try Azure OpenAI TTS ----------------
+        use_openai = bool(os.getenv("AZURE_TTS_KEY") and os.getenv("AZURE_TTS_ENDPOINT"))
+        combined_audio = None
+        if use_openai:
+            try:
+                for idx, (text_line, gender) in enumerate(tts_segments):
+                    voice = random.choice(MALE_VOICES) if gender == "male" else random.choice(FEMALE_VOICES)
+                    temp_file = os.path.join(AUDIO_DIR, f".temp_{idx}.mp3")
+                    generate_audio(text_line, temp_file, provider="azure", voice=voice)
+                    segment = AudioSegment.from_file(temp_file, format="mp3")
+                    combined_audio = segment if combined_audio is None else combined_audio + segment
+                    os.remove(temp_file)
+                combined_audio.export(file_path, format="mp3")
+                logger.info("Azure OpenAI TTS successful")
+            except Exception as e:
+                logger.warning(f"Azure OpenAI TTS failed, falling back to Cognitive Services: {e}")
+                use_openai = False
 
-        if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
-            if result.reason == speechsdk.ResultReason.Canceled:
-                cancellation = result.cancellation_details
-                logger.error(f"TTS canceled: {cancellation.reason}, {cancellation.error_details}")
-                raise Exception(f"TTS canceled: {cancellation.reason}, {cancellation.error_details}")
-            raise Exception(f"TTS failed: {result.reason}")
+        # ---------------- Fallback to Azure Cognitive Services ----------------
+        if not use_openai:
+            AZURE_SPEECH_KEY = "BMxJMWlLoKNGAHGtxofG9cEEApeDcdRUmurUFxOnBloIxVVkv8qMJQQJ99BHACGhslBXJ3w3AAAYACOG6n5a"
+            AZURE_SPEECH_REGION = "centralindia"
+            if not AZURE_SPEECH_KEY or not AZURE_SPEECH_REGION:
+                raise RuntimeError("No valid Azure TTS credentials available")
+
+            speech_config = speechsdk.SpeechConfig(subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION)
+            combined_audio = None
+            for idx, (text_line, gender) in enumerate(tts_segments):
+                voice = random.choice(CS_MALE_VOICES) if gender == "male" else random.choice(CS_FEMALE_VOICES)
+                ssml_text = f"""
+                <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+                    <voice name="{voice}">
+                        <prosody rate="0%">{saxutils.escape(text_line)}</prosody>
+                        <break time="500ms"/>
+                    </voice>
+                </speak>
+                """
+                temp_file = os.path.join(AUDIO_DIR, f".temp_cs_{idx}.wav")
+                audio_config = speechsdk.audio.AudioOutputConfig(filename=temp_file)
+                synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+                result = synthesizer.speak_ssml_async(ssml_text).get()
+                if result.reason != speechsdk.ResultReason.SynthesizingAudioCompleted:
+                    raise RuntimeError(f"Cognitive Services TTS failed for line {idx}")
+                segment = AudioSegment.from_file(temp_file, format="wav")
+                combined_audio = segment if combined_audio is None else combined_audio + segment
+                os.remove(temp_file)
+            combined_audio.export(file_path, format="mp3")
+            logger.info("Azure Cognitive Services TTS successful")
 
         podcast_audio_url = f"http://localhost:5001/static/audio/{filename}"
 
@@ -926,15 +907,14 @@ def generate_podcast():
             "script": podcast_script,
             "audio_url": podcast_audio_url,
             "voices_used": {
-                "host": male_voice,
-                "guest": female_voice
+                "host": tts_segments[0][1],
+                "guest": tts_segments[1][1] if len(tts_segments) > 1 else "female"
             }
         })
 
     except Exception as e:
         logger.exception("Error in generate_podcast")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
-
 
 #---------------------------#
 # positive pdf query          #
