@@ -29,6 +29,7 @@ const UploadPage: React.FC = () => {
   // --- Particle background (same as original) ---
   useEffect(() => {
     const canvas = canvasRef.current;
+    sessionStorage.clear();
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let particles: { x: number; y: number; r: number; dx: number; dy: number }[] = [];
